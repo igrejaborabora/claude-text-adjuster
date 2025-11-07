@@ -4,7 +4,6 @@
   "installCommand": "npm install",
   "framework": "nextjs",
   "env": {
-    "GEMINI_API_KEY": "@gemini-api-key",
-    "GEMINI-API-KEY": "@gemini-api-key"
+    "GEMINI_API_KEY": "@gemini-api-key"
   }
 }

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     } = await request.json();
 
     // Validar environment variables
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
         { error: "GEMINI_API_KEY não configurada no servidor" },
