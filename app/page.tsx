@@ -134,67 +134,80 @@ export default function Home() {
       const lowerBound = Math.round(targetChars * 0.90); // Aumentado para 90%
       const upperBound = targetChars; // Limite estrito
       
-      const systemPrompt = `És um editor profissional de excelência. Ajusta o texto para ficar EXATAMENTE com ${targetChars} caracteres, com tolerância MÍNIMA de ${lowerBound}-${targetChars}.
+      const systemPrompt = `És um editor profissional especializado em REPHRASE/REESCRITA. Teu objetivo é REFORMULAR o texto para ${targetChars} caracteres, mantendo TODAS as informações e significado original.
 
 **REGRA CRÍTICA: NUNCA EXCEDER ${targetChars} CARACTERES**
-- Se exceder ${targetChars}: resultado é INACEITÁVEL
-- Se ficar abaixo de ${lowerBound}: resultado é POBRE
-- Ideal: ${targetChars - 5} a ${targetChars} caracteres
+**REGRA ESSENCIAL: MANTER TODO O CONTEXTO E INFORMAÇÃO**
 
-MÉTODO DE CONTAGEM PRECISA:
-- LETRAS (A-Z, a-z, com acentos): cada uma = 1 caractere
-- ESPAÇOS: CADA espaço = 1 caractere
-- PONTUAÇÃO (. , ; : ! ?): cada uma = 1 caractere
-- NÚMEROS (0-9): cada um = 1 caractere
-- QUEBRAS DE LINHA (\n): cada uma = 1 caractere
+- Alvo: ${targetChars} caracteres (faixa aceitável: ${lowerBound}-${targetChars})
+- Se exceder: REESCREVE mais conciso
+- Se ficar curto: EXPANDE com detalhes
+- NUNCA CORTAR/TRUNCAR - sempre REESCREVER
 
-**ESTRATÉGIA SEM CORTAR PALAVRAS:**
-1. Se precisar REDUZIR: reescreve frases para serem mais concisas
-2. Se precisar EXPANDIR: adiciona detalhes relevantes
-3. NUNCA cortar palavras no meio
-4. NUNCA truncar texto brutalmente
+**IMPORTANTE - ISTO NÃO É UM RESUMO:**
+❌ NÃO remover informações
+❌ NÃO fazer resumo
+❌ NÃO truncar/cortar texto
+✅ REESCREVER mantendo tudo
+✅ CONDENSAR através de reformulação
+✅ TODAS as informações devem aparecer
 
-**FORMATO OBRIGATÓRIO:**
-- TEXTO CONTÍNUO (sem quebras de linha)
-- APENAS o texto final (sem "Gemini" ou assinaturas)
-- Contagem exata: ${targetChars} caracteres
+**TÉCNICAS DE CONDENSAÇÃO (quando reduzir):**
+1. Substituir frases longas por equivalentes curtas
+2. Usar sinônimos mais concisos
+3. Combinar frases relacionadas
+4. Eliminar redundâncias de forma natural
+5. Manter todos os números, datas, valores
+6. Preservar todas as ideias principais e secundárias
 
-**VALIDAÇÃO FINAL:**
-Antes de responder, conta os caracteres:
-1. Se exceder ${targetChars}: volta e reduz mais
-2. Se estiver abaixo de ${lowerBound}: volta e expande
-3. Só responde quando estiver na faixa ${lowerBound}-${targetChars}`;
+**TÉCNICAS DE EXPANSÃO (quando aumentar):**
+1. Adicionar contexto relevante
+2. Detalhar informações existentes
+3. Explicar conceitos mencionados
+4. Incluir exemplos concretos
+
+**FORMATO:**
+- Texto contínuo e coeso
+- ${targetChars} caracteres (±10%)
+- NUNCA exceder ${targetChars}`;
 
       const userPrompt = `TEXTO ORIGINAL (${originalCount} caracteres):
 ${originalNorm}
 
-**TAREFA ESPECÍFICA:**
-- Alvo EXATO: ${targetChars} caracteres
-- Faixa MÍNIMA aceitável: ${lowerBound}-${targetChars}
-- **NUNCA EXCEDER ${targetChars}** (resultado inválido se exceder)
-
-**INSTRUÇÕES CRÍTICAS:**
-1. Conta caracteres CUIDADOSAMENTE antes de responder
-2. Se exceder ${targetChars}: volta e reduz sem cortar palavras
-3. Se estiver abaixo de ${lowerBound}: volta e expande com detalhes
-4. Responde APENAS quando estiver na faixa ${lowerBound}-${targetChars}
-
-**MÉTODO:**
+**TAREFA: REPHRASE COMPLETO**
 ${originalCount > targetChars ? 
-  `✅ REDUZIR: Reescreve frases para serem mais concisas, mantendo essencial.
-   - Remove redundâncias por reescrita (não por corte)
-   - Condensa ideias sem perder significado
-   - Para quando ficar entre ${lowerBound}-${targetChars}` :
-  `✅ EXPANDIR: Adiciona detalhes concretos e relevantes.
-   - Exemplos, dados, benefícios, contextos
-   - Expande ideias existentes sem repetir
-   - Para quando ficar entre ${lowerBound}-${targetChars}`
+  `📉 CONDENSAR de ${originalCount} para ${targetChars} caracteres
+
+**COMO CONDENSAR (mantendo TUDO):**
+1. Identifica TODAS as informações presentes
+2. Reescreve cada informação de forma mais concisa
+3. Usa vocabulário mais direto e objetivo
+4. Combina frases relacionadas
+5. Elimina apenas palavras redundantes, NÃO informações
+6. Resultado: TODAS as informações em menos caracteres
+
+**CHECKLIST - O texto condensado deve incluir:**
+- ✅ Todos os números e valores mencionados
+- ✅ Todas as datas e períodos
+- ✅ Todos os nomes e entidades
+- ✅ Todas as ações e objetivos
+- ✅ Todos os conceitos e ideias` :
+  `📈 EXPANDIR de ${originalCount} para ${targetChars} caracteres
+
+**COMO EXPANDIR:**
+1. Adiciona contexto a cada ponto mencionado
+2. Detalha processos e metodologias
+3. Inclui benefícios e impactos específicos
+4. Explica termos técnicos quando relevante
+5. Adiciona exemplos concretos
+6. Resultado: Mesma informação com mais profundidade`
 }
 
-**OUTPUT:**
-- Apenas o texto ajustado (contínuo, sem \\n)
-- Exatamente ${targetChars} caracteres (ou na faixa ${lowerBound}-${targetChars})
-- Sem assinaturas ou "Gemini"`;
+**META FINAL:**
+- ${targetChars} caracteres (aceitável: ${lowerBound}-${targetChars})
+- **NUNCA exceder ${targetChars}**
+- Texto coeso e completo
+- ZERO perda de informação`;
 
       let result = await callAdjustAPI(systemPrompt, userPrompt);
       setIterations(1);
@@ -222,24 +235,42 @@ ${originalCount > targetChars ?
         }
         // Se excedeu o limite após hard cap (raro), tentar reescrever
         if (diff > 0) {
-          const fineSystem = `AJUSTE FINO – TEXTO ACIMA DO LIMITE (SEM TRUNCAR PALAVRAS)
+          const fineSystem = `AJUSTE FINO – REPHRASE PARA REDUZIR (${resultCount} → ${targetChars} chars)
 
-Situação: ${resultCount} > ${targetChars} (excedeu em ${diff} = ${Math.abs(percentDiff).toFixed(1)}%)
-Objetivo: Reescrever/condensar até ficar ENTRE ${lowerBound} e ${targetChars}
-Método: Reescreve frases para serem mais concisas. Não cortar palavras.
-Formato: Texto contínuo, profissional, coerente.
+**SITUAÇÃO:** Texto tem ${diff} caracteres a mais (${Math.abs(percentDiff).toFixed(1)}% acima)
+
+**OBJETIVO:** REESCREVER todo o texto de forma mais concisa
+- Meta: ${lowerBound} a ${targetChars} caracteres
+- Método: REFORMULAÇÃO, não truncamento
+- TODAS as informações devem permanecer
+
+**TÉCNICA:**
+1. Identifica cada informação presente
+2. Reformula cada uma de forma mais direta
+3. Usa vocabulário mais conciso
+4. Mantém TODOS os dados, nomes, valores, datas
+5. Resultado: mesma informação, menos caracteres
 
 **CRÍTICO: NUNCA EXCEDER ${targetChars} CARACTERES**`;
 
-          const fineUser = `TEXTO ACIMA DO LIMITE (${resultCount} chars):
+          const fineUser = `TEXTO PARA REPHRASE (${resultCount} chars):
 ${resultNorm}
 
-**TAREFA CRÍTICA:**
-- Reduzir para ${targetChars} caracteres OU MENOS
-- **NUNCA EXCEDER ${targetChars}**
-- Reescrever frases (não cortar palavras)
-- Manter informação essencial
-- Resultado: texto contínuo`;
+**TAREFA:**
+Reescreve este texto em ${targetChars} caracteres mantendo:
+✅ Todas as informações e conceitos
+✅ Todos os números e valores
+✅ Todas as datas e períodos
+✅ Todos os nomes e entidades
+✅ Todo o significado original
+
+**MÉTODO:**
+- Usa frases mais diretas e objetivas
+- Substitui expressões longas por curtas
+- Combina informações relacionadas
+- Elimina apenas redundâncias
+
+**META:** ${targetChars} caracteres (máximo absoluto)`;
 
           const fineResponse = await fetch('/api/adjust', {
             method: 'POST',
@@ -490,12 +521,19 @@ ${resultNorm}
 
       {/* Info Section */}
       <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-3">Como Funciona</h3>
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">Como Funciona - REPHRASE Inteligente</h3>
+        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
+          <p className="text-sm text-blue-900">
+            <strong>⚠️ IMPORTANTE:</strong> Esta aplicação faz <strong>REPHRASE/REESCRITA</strong>, não resumo ou truncamento.
+            <br/>
+            <strong>TODAS as informações</strong> do texto original são mantidas, apenas reformuladas para caber no limite de caracteres.
+          </p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
           <div className="flex items-start gap-2">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
             <div>
-              <strong>Contagem Word:</strong> TUDO conta (letras, espaços, pontuação, quebras)
+              <strong>Rephrase Completo:</strong> Reformula mantendo TODO o contexto
             </div>
           </div>
           <div className="flex items-center gap-2 mb-3">
@@ -507,7 +545,7 @@ ${resultNorm}
           <div className="flex items-start gap-2">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
             <div>
-              <strong>Validação:</strong> Como no Word "caracteres (incl. espaços)"
+              <strong>Zero Perda:</strong> Nenhuma informação é removida
             </div>
           </div>
         </div>
