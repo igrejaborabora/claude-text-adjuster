@@ -34,7 +34,7 @@ Ferramenta de ajuste preciso de caracteres usando inteligência artificial Anthr
 git clone https://github.com/igrejaborabora/claude-text-adjuster.git
 cd claude-text-adjuster
 
-# Instalar dependências
+# Instalar dependências (resolve todos os erros de lint)
 npm install
 
 # Configurar ambiente
@@ -47,6 +47,21 @@ cp .env.local.example .env.local
 npm run dev
 ```
 Acesse `http://localhost:3000`
+
+### 🔧 Resolução de Erros de Lint
+
+Os erros de lint que você pode ver no IDE são esperados e desaparecem após instalar as dependências:
+
+```bash
+npm install
+```
+
+**Erros comuns e suas soluções:**
+- `Cannot find module 'next'` → `npm install` instala Next.js
+- `Cannot find module 'react'` → `npm install` instala React
+- `Cannot find module 'lucide-react'` → `npm install` instala ícones
+- `Unknown at rule @tailwind` → `npm install` instala Tailwind CSS
+- `Cannot find name 'process'` → `npm install` instala @types/node
 
 ## 📁 Estrutura do Projeto
 
@@ -86,6 +101,7 @@ claude-text-adjuster/
 - ✅ Loop ajuste fino sem pontos de enchimento
 - ✅ Precisão aceitável: ±2 caracteres = "Perfeito"
 - ✅ Interface com status visual
+- ✅ TypeScript estrito com tipos explícitos
 
 ### 3. Segurança
 - ✅ Chave API apenas no backend
