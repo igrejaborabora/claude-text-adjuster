@@ -252,11 +252,68 @@ DEVOLVE texto com ${Math.round(targetChars * 0.98)} caracteres (não ${Math.roun
           setIterations(i);
           continue;
         }
-        
-        // Parar se estiver dentro da tolerância [-3%, -2%] (97%-98%)
-        if (percentDiff >= -3 && percentDiff <= -2) break;
 
-        // Se está abaixo de -5%, não fazer mais nada (aceitar como está)
+        // Se estiver dentro da tolerância [-3%, -1%] (97%-99%) aceitar
+        if (percentDiff >= -3 && percentDiff <= -1) break;
+
+        // Se estiver muito curto (< -3%), expandir até 98%
+        if (percentDiff < -3) {
+          const target98 = Math.round(targetChars * 0.98);
+          const charsNeeded = target98 - resultCount;
+          if (charsNeeded <= 0) break;
+
+          const fineSystem = `EMERGÊNCIA - TEXTO MUITO CURTO
+
+Texto atual: ${resultCount} caracteres (${(resultCount / targetChars * 100).toFixed(1)}% do limite)
+FALTAM: ${charsNeeded} caracteres para atingir ${target98} (98%)
+
+AÇÃO IMEDIATA:
+- ADICIONAR ${charsNeeded} caracteres RELEVANTES agora
+- Objetivo final obrigatório: ${target98} caracteres (98%)
+- NUNCA ultrapassar ${targetChars - 1}
+
+COMO EXPANDIR:
+1. Reintroduz detalhes essenciais removidos
+2. Acrescenta contexto, benefícios, métricas, exemplos concretos
+3. Mantém coerência e fluxo lógico
+4. Evita repetições e encheção
+5. Texto contínuo, sem quebras de linha
+6. Após expandir, confere: ficou entre ${Math.round(targetChars * 0.97)} e ${target98}?`;
+
+          const fineUser = `TEXTO MUITO CURTO (${resultCount} caracteres):
+${resultNorm}
+
+PRECISA ADICIONAR: ${charsNeeded} caracteres
+ALVO FINAL: ${target98} caracteres (98%)
+
+ADICIONA informação relevante:
+- Detalhes estratégicos
+- Resultados esperados
+- Benefícios, impactos, métricas
+- Contexto adicional e conclusões
+
+DEVOLVE texto com ${target98} caracteres (aceitável: ${Math.round(targetChars * 0.97)}-${target98}), SEM ultrapassar ${targetChars - 1}.`;
+
+          const fineResponse = await fetch('/api/adjust', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              model: 'gemini-2.0-flash-exp',
+              maxTokens: 1800,
+              temperature: 0.3,
+              systemPrompt: fineSystem,
+              userPrompt: fineUser
+            })
+          });
+
+          if (!fineResponse.ok) break;
+          const fineData = await fineResponse.json();
+          result = normalizeForCount(fineData.text || result);
+          setIterations(i);
+          continue;
+        }
+
+        // Caso contrário, interrompe para evitar loops infinitos
         break;
       }
 
