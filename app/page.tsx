@@ -96,11 +96,10 @@ export default function GeminiTextAdjuster() {
       const originalCount = charCount(originalNorm);
       const diffNeeded = targetChars - originalCount;
       
-      const systemPrompt = `És um editor profissional de excelência. Ajusta o texto para ${Math.round(targetChars * 0.97)} caracteres.
+      const systemPrompt = `És um editor profissional de excelência. Ajusta o texto para ${Math.round(targetChars * 0.96)} caracteres.
 
-⚠️ LIMITE ABSOLUTO CRÍTICO: ${targetChars} caracteres
-❌ SE PASSAR DE ${targetChars} = REJEITADO TOTALMENTE
-✅ ALVO INTERNO SEGURO: ${Math.round(targetChars * 0.97)} caracteres (buffer de 3%)
+⚠️ LIMITE ABSOLUTO CRÍTICO: ${targetChars} caracteres (NUNCA EXCEDER)
+✅ ALVO OBRIGATÓRIO: ${Math.round(targetChars * 0.96)} caracteres (96% do limite)
 
 MÉTODO DE CONTAGEM (COMO NO WORD):
 - LETRAS: A-Z, a-z, com acentos, ç, ñ, etc.
@@ -113,22 +112,23 @@ MÉTODO DE CONTAGEM (COMO NO WORD):
 - NÚMEROS: 0-9 = 1 caractere cada
 - SÍMBOLOS: @ # $ % & * + = / \\ < > ~ ^ \` | = 1 caractere
 
-FAIXAS DE SEGURANÇA:
-1. ✅✅✅ IDEAL: ${Math.round(targetChars * 0.95)} a ${Math.round(targetChars * 0.97)} caracteres (95%-97%)
-2. ✅✅ BOM: ${Math.round(targetChars * 0.93)} a ${Math.round(targetChars * 0.94)} caracteres (93%-94%)
-3. ✅ ACEITÁVEL: ${Math.round(targetChars * 0.90)} a ${Math.round(targetChars * 0.92)} caracteres (90%-92%)
-4. ⚠️ EVITAR: ${Math.round(targetChars * 0.98)} a ${targetChars - 1} caracteres (98%-99.9% - risco de ultrapassar)
-5. ❌❌❌ PROIBIDO: ${targetChars} ou mais caracteres (NUNCA!)
+FAIXAS DE RESULTADO:
+1. ✅✅✅ IDEAL: ${Math.round(targetChars * 0.94)} a ${Math.round(targetChars * 0.96)} caracteres (94%-96%)
+2. ✅✅ BOM: ${Math.round(targetChars * 0.92)} a ${Math.round(targetChars * 0.93)} caracteres (92%-93%)
+3. ✅ ACEITÁVEL: ${Math.round(targetChars * 0.90)} a ${Math.round(targetChars * 0.91)} caracteres (90%-91%)
+4. ⚠️ EVITAR: ${Math.round(targetChars * 0.97)} a ${targetChars - 1} caracteres (97%-99.9% - risco)
+5. ❌ PROIBIDO: ${targetChars} ou mais caracteres (NUNCA!)
+6. ⚠️ MUITO CURTO: Menos de ${Math.round(targetChars * 0.85)} caracteres (<85% - precisa adicionar)
 
-ESTRATÉGIA CONSERVADORA:
-- ALVO PRINCIPAL: ${Math.round(targetChars * 0.97)} caracteres (${targetChars} * 0.97)
-- NUNCA tentes chegar a ${targetChars} - é perigoso
-- Se estiver perto de ${Math.round(targetChars * 0.97)}: PARA de adicionar
-- É MUITO MELHOR ter ${Math.round(targetChars * 0.95)} que arriscar passar de ${targetChars}
-- Buffer de segurança de 3% para evitar ultrapassar
+ESTRATÉGIA:
+- ALVO PRINCIPAL: ${Math.round(targetChars * 0.96)} caracteres
+- Se o texto original é MAIOR que ${targetChars}: REDUZ para ${Math.round(targetChars * 0.96)}
+- Se o texto original é MENOR que ${targetChars}: EXPANDE para ${Math.round(targetChars * 0.96)}
+- NUNCA tenta chegar a ${targetChars} - deixa buffer de 4%
+- IMPORTANTE: Conta os caracteres DURANTE a edição - objetivo é ${Math.round(targetChars * 0.96)}!
 
 QUALIDADE E FORMATO:
-1. Mantém informações ESSENCIAIS (mas não todas se necessário)
+1. Mantém informações ESSENCIAIS
 2. Preserva estrutura lógica
 3. Evita repetições
 4. Linguagem profissional
@@ -136,41 +136,52 @@ QUALIDADE E FORMATO:
 6. Sem "Gemini 2.5 Flash: preciso e rápido"
 7. Output: APENAS o texto final
 
-VALIDAÇÃO: Está entre ${Math.round(targetChars * 0.90)} e ${Math.round(targetChars * 0.97)} caracteres? NUNCA mais de ${targetChars - 1}!`;
+VALIDAÇÃO: Está entre ${Math.round(targetChars * 0.90)} e ${Math.round(targetChars * 0.96)} caracteres?`;
 
       const userPrompt = `TEXTO ORIGINAL (${originalCount} caracteres):
 ${originalNorm}
 
 ❌ LIMITE ABSOLUTO: ${targetChars} caracteres (NUNCA EXCEDER)
-✅ ALVO SEGURO: ${Math.round(targetChars * 0.97)} caracteres (97% do limite)
-✅ FAIXA IDEAL: ${Math.round(targetChars * 0.95)} a ${Math.round(targetChars * 0.97)} caracteres
+✅ ALVO OBRIGATÓRIO: ${Math.round(targetChars * 0.96)} caracteres (96% do limite)
+✅ FAIXA IDEAL: ${Math.round(targetChars * 0.94)} a ${Math.round(targetChars * 0.96)} caracteres (94%-96%)
 
-AJUSTE NECESSÁRIO: ${diffNeeded > 0 ? '+' : ''}${Math.round(diffNeeded * 0.97)} caracteres (para atingir 97%)
-NUNCA adicionar até ${targetChars} - PERIGO de ultrapassar!
-
-ESTRATÉGIA CONSERVADORA:
-${diffNeeded > 0 ? 
-  `✅ EXPANDIR COM CUIDADO: Adicionar até ${Math.round(targetChars * 0.97)} caracteres
-  - NÃO tentes chegar a ${targetChars} - MUITO PERIGOSO
-  - PARA ao atingir ${Math.round(targetChars * 0.97)} caracteres
-  - É melhor ${Math.round(targetChars * 0.95)} que arriscar ultrapassar
-  - Adiciona detalhes relevantes mas SEM EXAGERAR` : 
-  diffNeeded < -Math.round(targetChars * 0.10) ?
-    `✅ REDUZIR: Remover para ficar em ${Math.round(targetChars * 0.95)} caracteres
-    - Remove redundâncias mantendo essencial` :
-    `✅ AJUSTE MÍNIMO: Já está próximo da faixa ideal`
+${originalCount > targetChars ? 
+  `SITUAÇÃO: Texto GRANDE precisa ser REDUZIDO
+  - Original: ${originalCount} caracteres
+  - Alvo: ${Math.round(targetChars * 0.96)} caracteres  
+  - Reduzir: ${originalCount - Math.round(targetChars * 0.96)} caracteres
+  - IMPORTANTE: O resultado deve ter ${Math.round(targetChars * 0.96)} caracteres, não muito menos!` :
+  `SITUAÇÃO: Texto PEQUENO precisa ser EXPANDIDO
+  - Original: ${originalCount} caracteres
+  - Alvo: ${Math.round(targetChars * 0.96)} caracteres
+  - Adicionar: ${Math.round(targetChars * 0.96) - originalCount} caracteres
+  - IMPORTANTE: O resultado deve ter ${Math.round(targetChars * 0.96)} caracteres, não muito menos!`
 }
 
-MÉTODO DE EDIÇÃO CONSERVADOR:
-1. Preserva informações ESSENCIAIS (prioridade máxima)
+ESTRATÉGIA DE EDIÇÃO:
+${originalCount > targetChars ? 
+  `✅ REDUZIR PARA ${Math.round(targetChars * 0.96)} caracteres:
+  - Remove informações secundárias, exemplos, redundâncias
+  - Mantém informações ESSENCIAIS e dados críticos
+  - Condensa frases mantendo sentido
+  - MAS NÃO CORTA DEMAIS: Objetivo é ${Math.round(targetChars * 0.96)}, não ${Math.round(targetChars * 0.60)}!
+  - Verifica DURANTE a edição: já atingiu ${Math.round(targetChars * 0.96)}? PARA!` : 
+  `✅ EXPANDIR PARA ${Math.round(targetChars * 0.96)} caracteres:
+  - Adiciona detalhes relevantes, contexto, exemplos
+  - Expande conceitos importantes
+  - MAS NÃO EXAGERA: Para ao atingir ${Math.round(targetChars * 0.96)}!`
+}
+
+MÉTODO CONSERVADOR:
+1. Preserva informações ESSENCIAIS
 2. Mantém estrutura lógica
 3. Evita repetições
 4. Linguagem profissional
 5. TEXTO CONTÍNUO: Sem quebras de linha
 6. NUNCA adiciona "Gemini 2.5 Flash"
-7. PARA ao atingir ${Math.round(targetChars * 0.97)} - NÃO continua!
+7. CONTA caracteres DURANTE edição - alvo ${Math.round(targetChars * 0.96)}!
 
-OBJETIVO: Texto com ${Math.round(targetChars * 0.97)} caracteres (97%), NUNCA mais de ${targetChars - 1}.`;
+OBJETIVO FINAL: Texto com ${Math.round(targetChars * 0.96)} caracteres (96%), NUNCA mais de ${targetChars - 1}.`;
 
       let result = await callAdjustAPI(systemPrompt, userPrompt);
       setIterations(1);
@@ -190,32 +201,32 @@ OBJETIVO: Texto com ${Math.round(targetChars * 0.97)} caracteres (97%), NUNCA ma
 ❌ EXCEDEU EM: ${diff} caracteres (${Math.abs(percentDiff).toFixed(1)}% acima)
 
 AÇÃO IMEDIATA OBRIGATÓRIA:
-- CORTAR ${diff} caracteres AGORA
-- Alvo de corte: ${Math.round(targetChars * 0.97)} caracteres (97% - margem segura)
+- CORTAR ${diff + Math.round(targetChars * 0.04)} caracteres AGORA  
+- Alvo de corte: ${Math.round(targetChars * 0.96)} caracteres (96% - margem segura)
 - Remove frases finais, detalhes secundários, exemplos menos importantes
 - NUNCA pode ficar com mais de ${targetChars - 1} caracteres
 
 MÉTODO DE CORTE:
 1. Identifica frases/palavras menos essenciais no final
-2. Remove até atingir ${Math.round(targetChars * 0.97)} caracteres
+2. Remove até atingir ${Math.round(targetChars * 0.96)} caracteres
 3. Mantém coerência e sentido principal
 4. TEXTO CONTÍNUO sem quebras
-5. Verifica: está em ${Math.round(targetChars * 0.97)} caracteres?`;
+5. Verifica: está em ${Math.round(targetChars * 0.96)} caracteres?`;
 
           const fineUser = `TEXTO QUE EXCEDEU (${resultCount} chars):
 ${resultNorm}
 
 ❌ EXCEDEU EM: ${diff} caracteres
 ❌ LIMITE: ${targetChars} caracteres
-✅ ALVO DE CORTE: ${Math.round(targetChars * 0.97)} caracteres
+✅ ALVO DE CORTE: ${Math.round(targetChars * 0.96)} caracteres (96%)
 
-CORTA ${diff} caracteres removendo:
+CORTA até ficar com ${Math.round(targetChars * 0.96)} caracteres removendo:
 - Frases finais menos importantes
 - Detalhes secundários
 - Exemplos redundantes
 - Mantém informação essencial
 
-DEVOLVE texto cortado com ${Math.round(targetChars * 0.97)} caracteres!`;
+DEVOLVE texto cortado com ${Math.round(targetChars * 0.96)} caracteres!`;
 
           const fineResponse = await fetch('/api/adjust', {
             method: 'POST',
@@ -236,8 +247,8 @@ DEVOLVE texto cortado com ${Math.round(targetChars * 0.97)} caracteres!`;
           continue;
         }
         
-        // Parar se estiver dentro da tolerância [-5%, -3%]
-        if (percentDiff >= -5 && percentDiff <= -3) break;
+        // Parar se estiver dentro da tolerância [-6%, -4%] (90%-96%)
+        if (percentDiff >= -6 && percentDiff <= -4) break;
 
         // Se está abaixo de -5%, não fazer mais nada (aceitar como está)
         break;
