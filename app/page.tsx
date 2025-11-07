@@ -18,7 +18,7 @@ function estimateTokens(s: string): number {
   return Math.ceil(charCount(s) / 4);
 }
 
-export default function ClaudeTextAdjuster() {
+export default function GeminiTextAdjuster() {
   const [originalText, setOriginalText] = useState('');
   const [targetChars, setTargetChars] = useState(500);
   const [adjustedText, setAdjustedText] = useState('');
@@ -78,7 +78,7 @@ export default function ClaudeTextAdjuster() {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'gemini-2.0-flash-exp',
         maxTokens: 1800,
         temperature: 0.1,
         systemPrompt,
@@ -112,12 +112,13 @@ export default function ClaudeTextAdjuster() {
     setIterations(0);
 
     try {
-      // Prompt inicial robusto
+      // Prompt inicial otimizado para Gemini 2.5 Flash
       const systemPrompt = `
-És um editor extremamente preciso. Reescreve o texto para ter EXATAMENTE ${targetChars} caracteres, contado como em JavaScript após normalização NFC e com '\\n' como quebra de linha. Não adiciones cabeçalhos, aspas, nem comentários. Não alteres o significado.
+Você é um editor extremamente preciso. Reescreva o texto para ter EXATAMENTE ${targetChars} caracteres, contado como em JavaScript após normalização NFC e com '\\n' como quebra de linha. Não adicione cabeçalhos, aspas, nem comentários. Não altere o significado.
 Conta: cada letra/espaço/pontuação/quebra de linha = 1.
-Não uses caracteres invisíveis/zero-width para ajustar.
-Se não conseguires ficar EXACTO, fica entre −2 e +2 caracteres e otimiza na próxima iteração.
+Não use caracteres invisíveis/zero-width para ajustar.
+Se não conseguir ficar EXATO, fique entre −2 e +2 caracteres e otimize na próxima iteração.
+Seja conciso e direto. Gemini 2.5 Flash é rápido e preciso.
 `;
 
       const userPrompt = `
@@ -125,28 +126,31 @@ TEXTO ORIGINAL:
 ${normalizeForCount(originalText)}
 
 REGRAS:
-- Mantém o sentido
-- Evita redundâncias (se condensar)
-- Usa exemplos/expansões leves (se expandir)
-- Não introduzas "...", "###", nem aspas.
+- Mantenha o sentido essencial
+- Evite redundâncias (se condensar)
+- Use exemplos/expansões leves (se expandir)
+- Não introduza "...", "###", nem aspas
+- Seja direto ao ponto
 
 ALVO: ${targetChars} caracteres.
-Devolve APENAS o texto final.
+Devolve APENAS o texto final ajustado.
 `;
 
       let result = await callAdjustAPI(systemPrompt, userPrompt);
       setIterations(1);
 
-      // Loop de ajuste fino sem trim() e sem pontos de enchimento
+      // Loop de ajuste fino otimizado para Gemini
       for (let i = 0; i < 4; i++) {
         const diffNow = targetChars - charCount(result);
         
         if (Math.abs(diffNow) <= 2) break;
 
         const fineSystem = `
-Ajusta o texto para ${targetChars} caracteres (NFC + \\n).
+Ajuste o texto para ${targetChars} caracteres (NFC + \\n).
 Diferença atual: ${diffNow > 0 ? `ADICIONAR ${diffNow}` : `REMOVER ${Math.abs(diffNow)}`}.
-Não alteres o sentido. Não uses caracteres invisíveis. Devolve apenas o texto.`;
+Não altere o sentido. Não use caracteres invisíveis. Devolva apenas o texto ajustado.
+Gemini 2.5 Flash: preciso e rápido.
+`;
 
         const fineUser = result;
 
@@ -154,7 +158,7 @@ Não alteres o sentido. Não uses caracteres invisíveis. Devolve apenas o texto
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20241022',
+            model: 'gemini-2.0-flash-exp',
             maxTokens: 1800,
             temperature: 0.1,
             systemPrompt: fineSystem,
@@ -215,10 +219,10 @@ Não alteres o sentido. Não uses caracteres invisíveis. Devolve apenas o texto
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Claude Text Adjuster
+            Gemini Text Adjuster
           </h1>
           <p className="text-gray-600">
-            Ajuste preciso de caracteres com inteligência artificial Anthropic Claude
+            Ajuste preciso de caracteres com Google Gemini 2.5 Flash API - Grátis e Rápido
           </p>
         </div>
 
@@ -388,7 +392,7 @@ Não alteres o sentido. Não uses caracteres invisíveis. Devolve apenas o texto
             
             <div className="bg-gray-50 p-3 rounded">
               <div className="font-medium text-gray-700">Modelo</div>
-              <div className="text-lg font-mono">Claude 3.5 Sonnet</div>
+              <div className="text-lg font-mono">Gemini 2.5 Flash</div>
             </div>
           </div>
         </div>
