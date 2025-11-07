@@ -166,7 +166,7 @@ Não alteres o sentido. Não uses caracteres invisíveis. Devolve apenas o texto
 
         const fineData = await fineResponse.json();
         result = normalizeForCount(fineData.text || result);
-        setIterations(prev => prev + 1);
+        setIterations((prev: number) => prev + 1);
       }
 
       setAdjustedText(result);
