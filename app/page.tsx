@@ -277,7 +277,7 @@ OBJETIVO FINAL: Ajustar para dentro da tolerância [-5%, 0%] com máxima qualida
             Gemini Text Adjuster
           </h1>
           <p className="text-gray-600 text-lg">
-            Ajuste preciso de caracteres com Google Gemini 2.5 Flash - Grátis e Rápido
+            Ajuste preciso de caracteres com Google Gemini
           </p>
         </div>
 
