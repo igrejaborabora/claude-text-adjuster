@@ -122,14 +122,38 @@ export default function Home() {
       return;
     }
 
+    // Validação de redução extrema
+    const originalNorm = normalizeForCount(originalText);
+    const originalCount = charCount(originalNorm);
+    const reductionPercent = ((originalCount - targetChars) / originalCount) * 100;
+    const targetPercent = (targetChars / originalCount) * 100;
+    
+    // Aviso para reduções superiores a 20%
+    if (targetChars < originalCount && targetPercent < 80) {
+      const minRecommended = Math.round(originalCount * 0.80);
+      const confirmMessage = `⚠️ AVISO: Redução Extrema Detectada!\n\n` +
+        `Texto original: ${originalCount} caracteres\n` +
+        `Alvo solicitado: ${targetChars} caracteres (${targetPercent.toFixed(0)}% do original)\n` +
+        `Redução: ${reductionPercent.toFixed(0)}%\n\n` +
+        `🔍 IMPORTANTE:\n` +
+        `Reduções superiores a 20% tornam IMPOSSÍVEL manter todas as informações.\n` +
+        `A API inevitavelmente fará RESUMO em vez de REPHRASE completo.\n\n` +
+        `📊 RECOMENDAÇÃO:\n` +
+        `Alvo mínimo recomendado: ${minRecommended} caracteres (80% do original)\n` +
+        `Isso garante rephrase completo sem perda de informação.\n\n` +
+        `Deseja continuar mesmo assim?\n` +
+        `(Algumas informações provavelmente serão perdidas)`;
+      
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
+    }
+
     setIsProcessing(true);
     setError('');
     setIterations(0);
 
     try {
-      // Prompts otimizados para máxima precisão com Gemini
-      const originalNorm = normalizeForCount(originalText);
-      const originalCount = charCount(originalNorm);
       const diffNeeded = targetChars - originalCount;
       const lowerBound = Math.round(targetChars * 0.90); // Aumentado para 90%
       const upperBound = targetChars; // Limite estrito
@@ -448,6 +472,75 @@ ${resultNorm}
                 max="10000"
               />
             </div>
+
+            {/* Indicador de Redução/Expansão */}
+            {originalText.trim() && (
+              <div className="text-sm">
+                {(() => {
+                  const origCount = charCount(originalText);
+                  const targetPercent = (targetChars / origCount) * 100;
+                  const diff = targetChars - origCount;
+                  const isReduction = diff < 0;
+                  const isExpansion = diff > 0;
+                  const isExtremeReduction = isReduction && targetPercent < 80;
+                  
+                  if (isExtremeReduction) {
+                    const minRecommended = Math.round(origCount * 0.80);
+                    return (
+                      <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="font-semibold text-red-900">⚠️ Redução Extrema ({targetPercent.toFixed(0)}%)</p>
+                            <p className="text-red-700 text-xs mt-1">
+                              Reduções &gt; 20% causarão perda de informação!<br/>
+                              Mínimo recomendado: <strong>{minRecommended} chars</strong>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  
+                  if (isReduction && targetPercent >= 80) {
+                    return (
+                      <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded">
+                        <div className="flex items-center gap-2">
+                          <Info className="w-4 h-4 text-yellow-600" />
+                          <p className="text-yellow-900 text-xs">
+                            Redução: {Math.abs(diff)} chars ({targetPercent.toFixed(0)}% do original) - Rephrase possível
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  
+                  if (isExpansion) {
+                    return (
+                      <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-blue-600" />
+                          <p className="text-blue-900 text-xs">
+                            Expansão: +{diff} chars ({targetPercent.toFixed(0)}% do original) - Conteúdo será detalhado
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <div className="bg-green-50 border-l-4 border-green-500 p-3 rounded">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <p className="text-green-900 text-xs">
+                          Texto já está no alvo ({origCount} chars)
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
             <button
               onClick={adjustText}
