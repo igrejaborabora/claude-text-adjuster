@@ -96,7 +96,11 @@ export default function GeminiTextAdjuster() {
       const originalCount = charCount(originalNorm);
       const diffNeeded = targetChars - originalCount;
       
-      const systemPrompt = `És um editor profissional de excelência. Ajusta o texto para O MAIS PERTO POSSÍVEL de ${targetChars} caracteres.
+      const systemPrompt = `És um editor profissional de excelência. Ajusta o texto para ${Math.round(targetChars * 0.97)} caracteres.
+
+⚠️ LIMITE ABSOLUTO CRÍTICO: ${targetChars} caracteres
+❌ SE PASSAR DE ${targetChars} = REJEITADO TOTALMENTE
+✅ ALVO INTERNO SEGURO: ${Math.round(targetChars * 0.97)} caracteres (buffer de 3%)
 
 MÉTODO DE CONTAGEM (COMO NO WORD):
 - LETRAS: A-Z, a-z, com acentos, ç, ñ, etc.
@@ -109,188 +113,134 @@ MÉTODO DE CONTAGEM (COMO NO WORD):
 - NÚMEROS: 0-9 = 1 caractere cada
 - SÍMBOLOS: @ # $ % & * + = / \\ < > ~ ^ \` | = 1 caractere
 
-OBJETIVO PRIORITÁRIO - MAXIMIZAR CARACTERES:
-1. ALVO IDEAL: ${targetChars} caracteres (100% do objetivo)
-2. MÍNIMO ACEITÁVEL: ${Math.round(targetChars * 0.95)} caracteres (95% - só se inevitável)
-3. NUNCA exceder ${targetChars} caracteres (limite máximo absoluto)
-4. PRIORIDADE: Chegar O MAIS PERTO POSSÍVEL de ${targetChars} (ideal: ${targetChars - 5} a ${targetChars})
+FAIXAS DE SEGURANÇA:
+1. ✅✅✅ IDEAL: ${Math.round(targetChars * 0.95)} a ${Math.round(targetChars * 0.97)} caracteres (95%-97%)
+2. ✅✅ BOM: ${Math.round(targetChars * 0.93)} a ${Math.round(targetChars * 0.94)} caracteres (93%-94%)
+3. ✅ ACEITÁVEL: ${Math.round(targetChars * 0.90)} a ${Math.round(targetChars * 0.92)} caracteres (90%-92%)
+4. ⚠️ EVITAR: ${Math.round(targetChars * 0.98)} a ${targetChars - 1} caracteres (98%-99.9% - risco de ultrapassar)
+5. ❌❌❌ PROIBIDO: ${targetChars} ou mais caracteres (NUNCA!)
 
-ESTRATÉGIA PARA ATINGIR O ALVO:
-- Se faltar caracteres: Adiciona detalhes relevantes, contexto, exemplos, dados complementares
-- Se sobrar muito: Remove apenas redundâncias óbvias, mantém máximo de informação
-- Prefere SEMPRE estar entre ${targetChars - 10} e ${targetChars} caracteres
-- Evita ser muito conservador - usa todo o espaço disponível
+ESTRATÉGIA CONSERVADORA:
+- ALVO PRINCIPAL: ${Math.round(targetChars * 0.97)} caracteres (${targetChars} * 0.97)
+- NUNCA tentes chegar a ${targetChars} - é perigoso
+- Se estiver perto de ${Math.round(targetChars * 0.97)}: PARA de adicionar
+- É MUITO MELHOR ter ${Math.round(targetChars * 0.95)} que arriscar passar de ${targetChars}
+- Buffer de segurança de 3% para evitar ultrapassar
 
 QUALIDADE E FORMATO:
-1. Mantém 100% do sentido e informações ESSENCIAIS
-2. Preserva a estrutura lógica e fluxo narrativo
-3. Evita repetições e redundâncias
-4. Linguagem profissional e clara
-5. TEXTO CONTÍNUO: Sem parágrafos, sem quebras de linha, tudo em um único bloco
-6. Sem trim(), sem "...", sem "###", sem aspas, sem "Gemini 2.5 Flash: preciso e rápido"
-7. Output: APENAS o texto final contínuo, sem explicações
+1. Mantém informações ESSENCIAIS (mas não todas se necessário)
+2. Preserva estrutura lógica
+3. Evita repetições
+4. Linguagem profissional
+5. TEXTO CONTÍNUO: Sem parágrafos, sem quebras de linha
+6. Sem "Gemini 2.5 Flash: preciso e rápido"
+7. Output: APENAS o texto final
 
-VALIDAÇÃO: Depois de escrever, conta MANUALMENTE: está entre ${Math.round(targetChars * 0.95)} e ${targetChars} caracteres? Prioriza estar próximo de ${targetChars}!`;
+VALIDAÇÃO: Está entre ${Math.round(targetChars * 0.90)} e ${Math.round(targetChars * 0.97)} caracteres? NUNCA mais de ${targetChars - 1}!`;
 
       const userPrompt = `TEXTO ORIGINAL (${originalCount} caracteres):
 ${originalNorm}
 
-ANÁLISE DA CONTAGEM ATUAL:
-- Letras: ${originalNorm.replace(/[^a-zA-Zà-ÿ]/g, '').length}
-- Espaços: ${originalNorm.split(' ').length - 1}
-- Quebras de linha: ${originalNorm.split('\n').length - 1}
-- Outros: ${originalCount - originalNorm.replace(/[^a-zA-Zà-ÿ]/g, '').length - (originalNorm.split(' ').length - 1) - (originalNorm.split('\n').length - 1)}
+❌ LIMITE ABSOLUTO: ${targetChars} caracteres (NUNCA EXCEDER)
+✅ ALVO SEGURO: ${Math.round(targetChars * 0.97)} caracteres (97% do limite)
+✅ FAIXA IDEAL: ${Math.round(targetChars * 0.95)} a ${Math.round(targetChars * 0.97)} caracteres
 
-AJUSTE NECESSÁRIO: ${diffNeeded > 0 ? '+' : ''}${diffNeeded} caracteres
-ALVO IDEAL: ${targetChars} caracteres (100%)
-FAIXA PREFERENCIAL: ${targetChars - 10} a ${targetChars} caracteres (99%-100%)
-MÍNIMO ACEITÁVEL: ${Math.round(targetChars * 0.95)} caracteres (95%)
-LIMITE MÁXIMO: ${targetChars} caracteres (NUNCA EXCEDER)
+AJUSTE NECESSÁRIO: ${diffNeeded > 0 ? '+' : ''}${Math.round(diffNeeded * 0.97)} caracteres (para atingir 97%)
+NUNCA adicionar até ${targetChars} - PERIGO de ultrapassar!
 
-EDIT PROFISSIONAL - MAXIMIZAR CARACTERES:
+ESTRATÉGIA CONSERVADORA:
 ${diffNeeded > 0 ? 
-  `✅ PRECISA EXPANDIR: Adicionar ${diffNeeded} caracteres (${Math.abs(diffNeeded / targetChars * 100).toFixed(1)}%)
-  - Adiciona detalhes relevantes, contexto, exemplos concretos
-  - Expande conceitos importantes com informações complementares
-  - Usa todo o espaço disponível sem ser repetitivo
-  - OBJETIVO: Chegar o mais perto possível de ${targetChars} caracteres` : 
-  diffNeeded < -Math.round(targetChars * 0.05) ?
-    `✅ PRECISA REDUZIR: Remover ${Math.abs(diffNeeded)} caracteres (texto muito curto)
-    - Remove apenas redundâncias óbvias
-    - Mantém máximo de informação possível
-    - OBJETIVO: Ficar entre ${Math.round(targetChars * 0.95)} e ${targetChars} caracteres` :
-    `✅ DENTRO DA TOLERÂNCIA: Texto está em faixa aceitável
-    - Ajuste fino para aproximar de ${targetChars} caracteres
-    - Maximiza uso do espaço disponível`
+  `✅ EXPANDIR COM CUIDADO: Adicionar até ${Math.round(targetChars * 0.97)} caracteres
+  - NÃO tentes chegar a ${targetChars} - MUITO PERIGOSO
+  - PARA ao atingir ${Math.round(targetChars * 0.97)} caracteres
+  - É melhor ${Math.round(targetChars * 0.95)} que arriscar ultrapassar
+  - Adiciona detalhes relevantes mas SEM EXAGERAR` : 
+  diffNeeded < -Math.round(targetChars * 0.10) ?
+    `✅ REDUZIR: Remover para ficar em ${Math.round(targetChars * 0.95)} caracteres
+    - Remove redundâncias mantendo essencial` :
+    `✅ AJUSTE MÍNIMO: Já está próximo da faixa ideal`
 }
 
-MÉTODO DE EDIÇÃO - PRIORIDADE MÁXIMA:
-1. Preservar INFORMAÇÕES ESSENCIAIS e dados críticos
-2. Manter estrutura lógica e fluxo narrativo
-3. Evitar repetições e frases redundantes
-4. Linguagem profissional e coerente
-5. Contar TUDO: letras, espaços, pontuação, quebras, símbolos
-6. NUNCA exceder ${targetChars} caracteres
-7. TEXTO CONTÍNUO OBRIGATÓRIO: Remover todas as quebras de linha, juntar tudo em um único parágrafo
-8. NUNCA adicionar "Gemini 2.5 Flash: preciso e rápido" ou qualquer texto extra
-9. MAXIMIZAR: Usar todo o espaço disponível - objetivo é ${targetChars}, não ${Math.round(targetChars * 0.95)}!
-10. Verificar: está entre ${targetChars - 10} e ${targetChars} caracteres? (faixa ideal)
+MÉTODO DE EDIÇÃO CONSERVADOR:
+1. Preserva informações ESSENCIAIS (prioridade máxima)
+2. Mantém estrutura lógica
+3. Evita repetições
+4. Linguagem profissional
+5. TEXTO CONTÍNUO: Sem quebras de linha
+6. NUNCA adiciona "Gemini 2.5 Flash"
+7. PARA ao atingir ${Math.round(targetChars * 0.97)} - NÃO continua!
 
-Devolve APENAS o texto editado contínuo (sem quebras de linha) O MAIS PRÓXIMO POSSÍVEL de ${targetChars} caracteres com qualidade profissional.`;
+OBJETIVO: Texto com ${Math.round(targetChars * 0.97)} caracteres (97%), NUNCA mais de ${targetChars - 1}.`;
 
       let result = await callAdjustAPI(systemPrompt, userPrompt);
       setIterations(1);
 
-      // Loop de ajuste fino com tolerância -5% a 0%
+      // Loop de ajuste fino - corta agressivamente se exceder
       for (let i = 2; i <= 4; i++) {
         const resultNorm = normalizeForCount(result);
         const resultCount = charCount(resultNorm);
         const diff = resultCount - targetChars;
         const percentDiff = (diff / targetChars) * 100;
         
-        // Parar se estiver dentro da tolerância [-5%, 0%]
-        if (percentDiff >= -5 && percentDiff <= 0) break;
+        // Se excedeu o limite: CORTAR IMEDIATAMENTE
+        if (diff > 0) {
+          const fineSystem = `EMERGÊNCIA - TEXTO EXCEDEU O LIMITE
 
-        const fineSystem = `AJUSTE FINO - MAXIMIZAR CARACTERES
+❌❌❌ PROBLEMA CRÍTICO: Texto tem ${resultCount} caracteres mas limite é ${targetChars}!
+❌ EXCEDEU EM: ${diff} caracteres (${Math.abs(percentDiff).toFixed(1)}% acima)
 
-SITUAÇÃO ATUAL: Texto tem ${resultCount} caracteres (${(resultCount / targetChars * 100).toFixed(1)}% do alvo)
-ALVO: ${targetChars} caracteres (100%)
-FAIXA IDEAL: ${targetChars - 10} a ${targetChars} caracteres (99%-100%)
-DIFERENÇA: ${diff > 0 ? `EXCEDEU em ${diff}` : `FALTAM ${Math.abs(diff)}`}
+AÇÃO IMEDIATA OBRIGATÓRIA:
+- CORTAR ${diff} caracteres AGORA
+- Alvo de corte: ${Math.round(targetChars * 0.97)} caracteres (97% - margem segura)
+- Remove frases finais, detalhes secundários, exemplos menos importantes
+- NUNCA pode ficar com mais de ${targetChars - 1} caracteres
 
-OBJETIVO PRIORITÁRIO:
-- IDEAL: ${targetChars} caracteres (100% do objetivo)
-- MUITO BOM: ${targetChars - 5} a ${targetChars} caracteres (99.5%-100%)
-- ACEITÁVEL: ${Math.round(targetChars * 0.95)} a ${targetChars - 6} caracteres (95%-99.4%)
-- EVITAR: Menos de ${Math.round(targetChars * 0.95)} caracteres (<95%)
+MÉTODO DE CORTE:
+1. Identifica frases/palavras menos essenciais no final
+2. Remove até atingir ${Math.round(targetChars * 0.97)} caracteres
+3. Mantém coerência e sentido principal
+4. TEXTO CONTÍNUO sem quebras
+5. Verifica: está em ${Math.round(targetChars * 0.97)} caracteres?`;
 
-EDIÇÃO DE QUALIDADE - MAXIMIZAÇÃO:
-- Preservar INFORMAÇÕES ESSENCIAIS e dados críticos
-- Manter estrutura lógica e fluxo narrativo 
-- Evitar repetições e frases redundantes
-- Linguagem profissional e coerente
-- Contar TUDO: letras, espaços, pontuação, quebras, símbolos
-- TEXTO CONTÍNUO OBRIGATÓRIO: Sem parágrafos, sem quebras de linha
-- NUNCA adicionar "Gemini 2.5 Flash: preciso e rápido"
-- USA TODO O ESPAÇO DISPONÍVEL - não sejas conservador!
-
-CORREÇÃO NECESSÁRIA:
-${diff > 0 ? 
-  `❌ REDUZIR ${diff} caracteres: texto excedeu o limite máximo - corta palavras extras` : 
-  percentDiff < -5 ? 
-    `⚠️ AUMENTAR ${Math.abs(diff)} caracteres: texto está em ${(resultCount / targetChars * 100).toFixed(1)}%
-    - Adiciona detalhes, contexto, exemplos relevantes
-    - Expande informações importantes
-    - USA TODO O ESPAÇO até ${targetChars} caracteres
-    - Objetivo: ${targetChars} caracteres (100%), não ${Math.round(targetChars * 0.95)} (95%)` :
-    diff < -10 ?
-      `✅ PRÓXIMO: Faltam apenas ${Math.abs(diff)} caracteres para ${targetChars}
-      - Adiciona detalhes finais para maximizar
-      - Objetivo: ${targetChars} caracteres exatos` :
-      `✅ EXCELENTE: Está em ${(resultCount / targetChars * 100).toFixed(1)}% do alvo
-      - Ajuste mínimo se necessário
-      - Mantém perto de ${targetChars} caracteres`
-}
-
-OBJETIVO: Chegar O MAIS PRÓXIMO POSSÍVEL de ${targetChars} caracteres (ideal: ${targetChars - 5} a ${targetChars}).`;
-
-        const fineUser = `TEXTO ATUAL (PRECISA MAXIMIZAR):
+          const fineUser = `TEXTO QUE EXCEDEU (${resultCount} chars):
 ${resultNorm}
 
-ANÁLISE ATUAL:
-- CONTAGEM: ${resultCount} caracteres (${(resultCount / targetChars * 100).toFixed(1)}% do alvo)
-- ALVO: ${targetChars} caracteres (100%)
-- FALTAM: ${Math.abs(diff)} caracteres para atingir o alvo
-- SITUAÇÃO: ${diff > 0 ? `⚠️ EXCEDEU limite em ${diff} caracteres - PRECISA REDUZIR` : 
-           percentDiff < -10 ? `⚠️ MUITO ABAIXO: Está em ${(resultCount / targetChars * 100).toFixed(1)}% - PRECISA MAXIMIZAR` :
-           percentDiff < -5 ? `⚠️ ABAIXO: Está em ${(resultCount / targetChars * 100).toFixed(1)}% - ADICIONA MAIS ${Math.abs(diff)} CARACTERES` :
-           diff < -5 ? `✅ PRÓXIMO: Faltam ${Math.abs(diff)} caracteres para perfeição` :
-           `✅ EXCELENTE: Está em ${(resultCount / targetChars * 100).toFixed(1)}% do alvo`}
+❌ EXCEDEU EM: ${diff} caracteres
+❌ LIMITE: ${targetChars} caracteres
+✅ ALVO DE CORTE: ${Math.round(targetChars * 0.97)} caracteres
 
-AÇÃO NECESSÁRIA:
-${diff > 0 ? 
-  `❌ REDUZIR ${diff} caracteres: Corta palavras extras sem perder sentido` : 
-  percentDiff < -10 ?
-    `⚠️ AUMENTAR ${Math.abs(diff)} caracteres: MAXIMIZA O TEXTO
-    - Adiciona contexto, detalhes, exemplos concretos
-    - Expande conceitos importantes
-    - USA TODO O ESPAÇO até ${targetChars} caracteres
-    - NÃO SEJAS CONSERVADOR - o objetivo é ${targetChars}, não ${Math.round(targetChars * 0.95)}!` :
-    percentDiff < -5 ?
-      `⚠️ AUMENTAR ${Math.abs(diff)} caracteres para atingir ${targetChars}
-      - Adiciona detalhes relevantes e informações complementares
-      - Objetivo: Aproximar de 100% (${targetChars} caracteres)` :
-      `✅ AJUSTE FINO: Adiciona ${Math.abs(diff)} caracteres finais para maximizar`
-}
+CORTA ${diff} caracteres removendo:
+- Frases finais menos importantes
+- Detalhes secundários
+- Exemplos redundantes
+- Mantém informação essencial
 
-INSTRUÇÕES FINAIS:
-- Preserva informações essenciais e dados críticos
-- Mantém estrutura lógica e fluxo narrativo
-- Evita repetições e frases redundantes
-- Linguagem profissional e coerente
-- TEXTO CONTÍNUO: Sem quebras de linha
-- NUNCA adiciona "Gemini 2.5 Flash: preciso e rápido"
-- MAXIMIZA: Objetivo é ${targetChars} caracteres, não menos!
+DEVOLVE texto cortado com ${Math.round(targetChars * 0.97)} caracteres!`;
 
-OBJETIVO: Ajustar para O MAIS PRÓXIMO POSSÍVEL de ${targetChars} caracteres (ideal: ${targetChars - 5} a ${targetChars}).`;
+          const fineResponse = await fetch('/api/adjust', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              model: 'gemini-2.0-flash-exp',
+              maxTokens: 1800,
+              temperature: 0.3,
+              systemPrompt: fineSystem,
+              userPrompt: fineUser
+            })
+          });
 
-        const fineResponse = await fetch('/api/adjust', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            model: 'gemini-2.0-flash-exp',
-            maxTokens: 1800,
-            temperature: 0.3,
-            systemPrompt: fineSystem,
-            userPrompt: fineUser
-          })
-        });
+          if (!fineResponse.ok) break;
+          const fineData = await fineResponse.json();
+          result = normalizeForCount(fineData.text || result);
+          setIterations(i);
+          continue;
+        }
+        
+        // Parar se estiver dentro da tolerância [-5%, -3%]
+        if (percentDiff >= -5 && percentDiff <= -3) break;
 
-        if (!fineResponse.ok) break;
-
-        const fineData = await fineResponse.json();
-        result = normalizeForCount(fineData.text || result);
-        setIterations(i);
+        // Se está abaixo de -5%, não fazer mais nada (aceitar como está)
+        break;
       }
 
       const finalResult = normalizeForCount(result);
