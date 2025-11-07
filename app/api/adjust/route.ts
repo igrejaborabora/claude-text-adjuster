@@ -22,16 +22,16 @@ export async function POST(request: NextRequest) {
     const { 
       systemPrompt, 
       userPrompt, 
-      model = "claude-3-5-sonnet-20241022", 
+      model = "gemini-2.0-flash-exp", 
       maxTokens = 2000, 
       temperature = 0.1 
     } = await request.json();
 
     // Validar environment variables
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "ANTHROPIC_API_KEY não configurada no servidor" },
+        { error: "GEMINI_API_KEY não configurada no servidor" },
         { status: 500 }
       );
     }
@@ -51,26 +51,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fazer chamada à Anthropic API
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    // Combinar system e user prompt para Gemini (formato diferente)
+    const combinedPrompt = `${systemPrompt}\n\n${userPrompt}`;
+
+    // Fazer chamada à Google Gemini API
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        temperature,
-        system: systemPrompt,
-        messages: [
+        contents: [
           { 
-            role: "user", 
-            content: [{ 
-              type: "text", 
-              text: userPrompt 
+            parts: [{ 
+              text: combinedPrompt 
             }] 
+          }
+        ],
+        generationConfig: {
+          temperature: temperature,
+          maxOutputTokens: maxTokens,
+          candidateCount: 1,
+        },
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_NONE"
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH", 
+            threshold: "BLOCK_NONE"
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_NONE"
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_NONE"
           }
         ]
       })
@@ -78,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Anthropic API error:", errorText);
+      console.error("Gemini API error:", errorText);
       
       // Tratar rate limit
       if (response.status === 429) {
@@ -92,13 +110,15 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json(
-        { error: `Erro na API Anthropic: ${errorText}` },
+        { error: `Erro na API Gemini: ${errorText}` },
         { status: response.status }
       );
     }
 
     const data = await response.json();
-    const text = data?.content?.[0]?.text ?? "";
+    
+    // Extrair texto da resposta Gemini
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 
     // Normalizar resultado
     const normalizedText = normalizeForCount(text);
@@ -109,7 +129,7 @@ export async function POST(request: NextRequest) {
       charCount: finalCharCount,
       estimatedTokens,
       model,
-      usage: data.usage
+      usage: data?.usageMetadata || {}
     });
 
   } catch (error: any) {
