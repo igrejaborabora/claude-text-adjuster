@@ -1,9 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Copy, Download, RefreshCw, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { Copy, Download, RefreshCw, CheckCircle, AlertCircle, Info, FileText, Globe } from 'lucide-react';
+import InternationalPricingDashboard from '@/components/InternationalPricingDashboard';
 
-export default function GeminiTextAdjuster() {
+export default function Home() {
+  const [activeTab, setActiveTab] = useState<'text-adjuster' | 'international-pricing'>('text-adjuster');
+  
+  // Text adjuster state
   const [originalText, setOriginalText] = useState('');
   const [targetChars, setTargetChars] = useState(100);
   const [adjustedText, setAdjustedText] = useState('');
@@ -55,8 +59,11 @@ export default function GeminiTextAdjuster() {
     ];
     const idx = Math.max(...candidates);
     if (idx !== -1) {
-      return slice.slice(0, windowStart + idx + 1).trim();
+      return slice.slice(0, windowStart + idx + 1);
     }
+    // Fallback: procurar último espaço em todo o slice
+    const lastSpace = slice.lastIndexOf(' ');
+    if (lastSpace !== -1) return slice.slice(0, lastSpace + 1);
     return slice;
   };
 
@@ -90,7 +97,7 @@ export default function GeminiTextAdjuster() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         model: 'gemini-2.0-flash-exp',
-        maxTokens: 1800,
+        maxTokens: 4000,
         temperature: 0.3,
         systemPrompt,
         userPrompt
@@ -126,104 +133,122 @@ export default function GeminiTextAdjuster() {
       const originalNorm = normalizeForCount(originalText);
       const originalCount = charCount(originalNorm);
       const diffNeeded = targetChars - originalCount;
-      const lowerBound = Math.round(targetChars * 0.95);
+      const lowerBound = Math.round(targetChars * 0.90); // Aumentado para 90%
+      const upperBound = targetChars; // Limite estrito
       
-      const systemPrompt = `És um editor profissional de excelência. Ajusta o texto para ficar ENTRE ${lowerBound} e ${targetChars} caracteres, preferindo ficar o mais próximo possível de ${targetChars} SEM NUNCA EXCEDER.
+      const systemPrompt = `És um editor profissional de excelência. Ajusta o texto para ficar EXATAMENTE com ${targetChars} caracteres, com tolerância MÍNIMA de ${lowerBound}-${targetChars}.
 
-TOLERÂNCIA E OBJETIVO:
-- Tolerância aceita: [-5%, 0%] ⇒ ${lowerBound} a ${targetChars}
-- Preferência: 99%-100% do alvo (ideal: ${targetChars - 2} a ${targetChars - 0})
-- Proibido exceder ${targetChars}
-- Proibido truncar palavras: NUNCA cortar caracteres "no meio"; reescreve/condensa em vez de cortar
+**REGRA CRÍTICA: NUNCA EXCEDER ${targetChars} CARACTERES**
+- Se exceder ${targetChars}: resultado é INACEITÁVEL
+- Se ficar abaixo de ${lowerBound}: resultado é POBRE
+- Ideal: ${targetChars - 5} a ${targetChars} caracteres
 
-MÉTODO DE CONTAGEM (COMO NO WORD):
-- LETRAS: A-Z, a-z, com acentos, ç, ñ, etc.
-- ESPAÇOS: CADA espaço entre palavras = 1 caractere
-- PONTUAÇÃO: . , ; : ! ? - cada uma = 1 caractere
-- ASPAS: " " ' ' - cada uma = 1 caractere
-- PARÊNTESES: ( ) [ ] { } - cada uma = 1 caractere
-- TRAVESSÕES: — - - espaço ANTES e DEPOIS conta
-- QUEBRAS DE LINHA: Cada \\n = 1 caractere
-- NÚMEROS: 0-9 = 1 caractere cada
-- SÍMBOLOS: @ # $ % & * + = / \\ < > ~ ^ \` | = 1 caractere
+MÉTODO DE CONTAGEM PRECISA:
+- LETRAS (A-Z, a-z, com acentos): cada uma = 1 caractere
+- ESPAÇOS: CADA espaço = 1 caractere
+- PONTUAÇÃO (. , ; : ! ?): cada uma = 1 caractere
+- NÚMEROS (0-9): cada um = 1 caractere
+- QUEBRAS DE LINHA (\n): cada uma = 1 caractere
 
-ESTRATÉGIA DE AJUSTE SEM TRUNCAR PALAVRAS:
-- Se ficar ACIMA de ${targetChars}: reescreve/condensa o último parágrafo primeiro; depois o penúltimo, e assim sucessivamente até ficar ≤ ${targetChars}. Nunca cortar palavras; alterar redação para reduzir.
-- Se ficar ABAIXO de ${lowerBound}: expande o último parágrafo com detalhes concretos; se necessário, expande o penúltimo; mantém coerência e fluxo.
-- Se cair entre ${lowerBound} e ${targetChars}: aceitar.
+**ESTRATÉGIA SEM CORTAR PALAVRAS:**
+1. Se precisar REDUZIR: reescreve frases para serem mais concisas
+2. Se precisar EXPANDIR: adiciona detalhes relevantes
+3. NUNCA cortar palavras no meio
+4. NUNCA truncar texto brutalmente
 
-QUALIDADE E FORMATO:
-1. Mantém informações ESSENCIAIS
-2. Preserva estrutura lógica
-3. Evita repetições
-4. Linguagem profissional
-5. TEXTO CONTÍNUO: Sem parágrafos, sem quebras de linha
-6. Sem "Gemini 2.5 Flash: preciso e rápido"
-7. Output: APENAS o texto final
+**FORMATO OBRIGATÓRIO:**
+- TEXTO CONTÍNUO (sem quebras de linha)
+- APENAS o texto final (sem "Gemini" ou assinaturas)
+- Contagem exata: ${targetChars} caracteres
 
-VALIDAÇÃO: Está entre ${lowerBound} e ${targetChars} caracteres ([-5%, 0%])?`;
+**VALIDAÇÃO FINAL:**
+Antes de responder, conta os caracteres:
+1. Se exceder ${targetChars}: volta e reduz mais
+2. Se estiver abaixo de ${lowerBound}: volta e expande
+3. Só responde quando estiver na faixa ${lowerBound}-${targetChars}`;
 
       const userPrompt = `TEXTO ORIGINAL (${originalCount} caracteres):
 ${originalNorm}
 
-📊 Objetivo e tolerância:
-- Alvo: ${targetChars} (nunca exceder)
-- Tolerância aceita: ${lowerBound}–${targetChars} ([-5%, 0%])
+**TAREFA ESPECÍFICA:**
+- Alvo EXATO: ${targetChars} caracteres
+- Faixa MÍNIMA aceitável: ${lowerBound}-${targetChars}
+- **NUNCA EXCEDER ${targetChars}** (resultado inválido se exceder)
 
-ESTRATÉGIA ESPECÍFICA (SEM CORTAR PALAVRAS):
+**INSTRUÇÕES CRÍTICAS:**
+1. Conta caracteres CUIDADOSAMENTE antes de responder
+2. Se exceder ${targetChars}: volta e reduz sem cortar palavras
+3. Se estiver abaixo de ${lowerBound}: volta e expande com detalhes
+4. Responde APENAS quando estiver na faixa ${lowerBound}-${targetChars}
+
+**MÉTODO:**
 ${originalCount > targetChars ? 
-  `✅ Texto maior que o alvo: reescreve e condensa o ÚLTIMO parágrafo primeiro.
-  - Se ainda exceder, condensa o penúltimo, e assim sucessivamente
-  - Remove redundâncias e frases periféricas por reescrita (não por truncamento)
-  - Para quando ficar entre ${lowerBound} e ${targetChars}` :
-  `✅ Texto menor que o alvo: expande o ÚLTIMO parágrafo com detalhes concretos (dados, exemplos, benefícios)
-  - Se ainda faltar, expande o penúltimo parágrafo
-  - Para quando ficar entre ${lowerBound} e ${targetChars}`
+  `✅ REDUZIR: Reescreve frases para serem mais concisas, mantendo essencial.
+   - Remove redundâncias por reescrita (não por corte)
+   - Condensa ideias sem perder significado
+   - Para quando ficar entre ${lowerBound}-${targetChars}` :
+  `✅ EXPANDIR: Adiciona detalhes concretos e relevantes.
+   - Exemplos, dados, benefícios, contextos
+   - Expande ideias existentes sem repetir
+   - Para quando ficar entre ${lowerBound}-${targetChars}`
 }
 
-FORMATO FINAL:
-1. TEXTO CONTÍNUO: Sem quebras de linha
-2. Linguagem profissional
-3. Mantém estrutura lógica
-4. NUNCA adiciona "Gemini 2.5 Flash"
-5. Output: APENAS o texto editado
-
-OBJETIVO: Ficar entre ${lowerBound} e ${targetChars} caracteres; preferir ${targetChars - 2} a ${targetChars}.`;
+**OUTPUT:**
+- Apenas o texto ajustado (contínuo, sem \\n)
+- Exatamente ${targetChars} caracteres (ou na faixa ${lowerBound}-${targetChars})
+- Sem assinaturas ou "Gemini"`;
 
       let result = await callAdjustAPI(systemPrompt, userPrompt);
       setIterations(1);
 
       // Loop de ajuste fino - mais iterações para convergir melhor
-      for (let i = 2; i <= 6; i++) {
+      for (let i = 2; i <= 8; i++) {
         const resultNorm = normalizeForCount(result);
         const resultCount = charCount(resultNorm);
         const diff = resultCount - targetChars;
         const percentDiff = (diff / targetChars) * 100;
         
-        // Se excedeu o limite: REESCREVER/CONDENSAR (sem truncar palavras)
+        // VALIDAÇÃO CRÍTICA: Se excedeu o limite, aplicar HARD CAP imediatamente
+        if (diff > 0) {
+          console.log(`🚨 API excedeu limite em ${diff} chars. Aplicando hard cap...`);
+          result = hardCapToMax(resultNorm, targetChars);
+          setIterations(i);
+          
+          // Verificar se o hard cap funcionou
+          const afterCapCount = charCount(result);
+          if (afterCapCount <= targetChars) {
+            console.log(`✅ Hard cap funcionou: ${afterCapCount} chars`);
+            break; // Sair do loop se estiver dentro do limite
+          }
+          continue;
+        }
+        // Se excedeu o limite após hard cap (raro), tentar reescrever
         if (diff > 0) {
           const fineSystem = `AJUSTE FINO – TEXTO ACIMA DO LIMITE (SEM TRUNCAR PALAVRAS)
 
 Situação: ${resultCount} > ${targetChars} (excedeu em ${diff} = ${Math.abs(percentDiff).toFixed(1)}%)
-Objetivo: Reescrever/condensar até ficar ENTRE ${lowerBound} e ${targetChars}, preferindo ${targetChars - 2} a ${targetChars}
-Método: Reescreve o ÚLTIMO parágrafo primeiro; se necessário o penúltimo, e assim por diante. Não cortar palavras, apenas reescrever para reduzir.
-Formato: Texto contínuo, profissional, coerente.`;
+Objetivo: Reescrever/condensar até ficar ENTRE ${lowerBound} e ${targetChars}
+Método: Reescreve frases para serem mais concisas. Não cortar palavras.
+Formato: Texto contínuo, profissional, coerente.
+
+**CRÍTICO: NUNCA EXCEDER ${targetChars} CARACTERES**`;
 
           const fineUser = `TEXTO ACIMA DO LIMITE (${resultCount} chars):
 ${resultNorm}
 
-TAREFA:
-- Reduzir por reescrita/condensação (sem truncar palavras)
-- Parar quando estiver entre ${lowerBound} e ${targetChars}
-- Preferir ${targetChars - 2} a ${targetChars}
-- Manter informação essencial e coerência`;
+**TAREFA CRÍTICA:**
+- Reduzir para ${targetChars} caracteres OU MENOS
+- **NUNCA EXCEDER ${targetChars}**
+- Reescrever frases (não cortar palavras)
+- Manter informação essencial
+- Resultado: texto contínuo`;
 
           const fineResponse = await fetch('/api/adjust', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               model: 'gemini-2.0-flash-exp',
-              maxTokens: 1800,
+              maxTokens: 4000,
               temperature: 0.3,
               systemPrompt: fineSystem,
               userPrompt: fineUser
@@ -237,48 +262,69 @@ TAREFA:
           continue;
         }
 
-        // Parar se dentro da tolerância [-5%, 0%]
-        if (percentDiff >= -5 && diff <= 0) break;
+        // Parar se dentro da tolerância [-10%, 0%] (aumentada)
+        if (percentDiff >= -10 && diff <= 0) break;
 
-        // Se estiver curto além da tolerância (< -5%), expandir até a faixa superior sem exceder
-        if (percentDiff < -5) {
+        // Se estiver curto além da tolerância (< -10%), expandir até a faixa superior sem exceder
+        if (percentDiff < -10) {
           const targetHigh = targetChars - 1; // preferir topo da faixa sem exceder
           const targetLow = lowerBound;
           const desired = Math.max(targetLow, targetHigh);
           const charsNeeded = desired - resultCount;
           if (charsNeeded <= 0) break;
 
-          const fineSystem = `AJUSTE FINO – TEXTO ABAIXO DA FAIXA (EXPANDIR EXATAMENTE)
+          const fineSystem = `AJUSTE FINO – TEXTO ABAIXO DA FAIXA (EXPANSÃO URGENTE)
 
 Texto atual: ${resultCount} caracteres (${(resultCount / targetChars * 100).toFixed(1)}% do alvo)
-FALTAM: ${charsNeeded} caracteres para atingir a faixa superior (${desired})
+FALTAM: ${charsNeeded} caracteres para atingir ${desired}
 
-Ação: ADICIONAR EXATAMENTE ${charsNeeded} caracteres (±2) via conteúdo relevante.
-- Expande o ÚLTIMO parágrafo com detalhes concretos (dados, benefícios, exemplos)
-- Se ainda faltar, expande o penúltimo
+**AÇÃO CRÍTICA:** ADICIONAR EXATAMENTE ${charsNeeded} caracteres
+- Expande o ÚLTIMO parágrafo com detalhes CONCRETOS e ESPECÍFICOS
+- Adiciona: exemplos, dados, benefícios, contextos, impactos
+- Se ainda faltar, expande o penúltimo parágrafo
 - Mantém coerência e fluxo lógico
-- Evita repetições/enchimento
-- Formato contínuo (sem \n)
-- Não exceder ${targetChars - 1}`;
+- Evita repetições e clichês
+- Formato contínuo (sem \\n)
+- **OBRIGATÓRIO: Não exceder ${targetChars - 1}**
+
+**EXEMPLOS DE CONTEÚDO PARA ADICIONAR:**
+- Dados quantificáveis (números, percentagens)
+- Benefícios específicos e mensuráveis
+- Exemplos práticos e casos de uso
+- Contexto de mercado ou setor
+- Impactos esperados ou resultados
+- Detalhes técnicos ou metodológicos`;
 
           const fineUser = `TEXTO ABAIXO DA FAIXA (${resultCount} caracteres):
 ${resultNorm}
 
-ADICIONAR EXATAMENTE: ${charsNeeded} caracteres (tolerância ±2)
-ALVO: ${desired} caracteres (topo da faixa, sem exceder)
-REGRAS:
-- Usa detalhes concretos (resultados, métricas, exemplos, impactos)
-- Mantém coerência e evita redundâncias
+**TAREFA URGENTE:**
+- ADICIONAR EXATAMENTE: ${charsNeeded} caracteres (tolerância ±5)
+- ALVO MÍNIMO: ${desired} caracteres
+- **NUNCA EXCEDER ${targetChars} caracteres**
+
+**CONTEÚDO PARA ADICIONAR:**
+- Dados concretos e específicos
+- Exemplos práticos e detalhados
+- Benefícios mensuráveis
+- Contexto de mercado/sector
+- Impactos quantificáveis
+- Detalhes técnicos/metodológicos
+
+**REGRAS:**
+- Expande parágrafos existentes (não cria novos)
+- Mantém coerência e fluxo lógico
+- Evita repetições e generalidades
 - Texto contínuo (sem quebras de linha)
-DEVOLVE apenas o texto expandido.`;
+- **Resultado: texto expandido dentro da faixa ${lowerBound}-${targetChars}**`;
 
           const fineResponse = await fetch('/api/adjust', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               model: 'gemini-2.0-flash-exp',
-              maxTokens: 1800,
-              temperature: 0.3,
+              maxTokens: 3000, // Aumentado para expansão
+              temperature: 0.4, // Aumentado para mais criatividade
               systemPrompt: fineSystem,
               userPrompt: fineUser
             })
@@ -295,7 +341,16 @@ DEVOLVE apenas o texto expandido.`;
         break;
       }
 
+      // VALIDAÇÃO FINAL: Garantir que nunca excede o limite
       let finalResult = hardCapToMax(result, targetChars);
+      const finalCount = charCount(finalResult);
+      
+      // Se ainda estiver excedendo (muito raro), cortar brutalmente
+      if (finalCount > targetChars) {
+        console.log(`🚨 EMERGÊNCIA: Cortando ${finalCount - targetChars} caracteres excedentes`);
+        finalResult = finalResult.slice(0, targetChars);
+      }
+      
       setAdjustedText(finalResult);
 
     } catch (err: any) {
@@ -313,164 +368,200 @@ DEVOLVE apenas o texto expandido.`;
     const percentDiff = (diff / targetChars) * 100;
     
     if (diff === 0) return { type: 'perfect', text: '🎯 EXATO', color: 'text-green-600' };
-    if (percentDiff >= -5 && diff < 0) return { type: 'excellent', text: '✅ Aceitável', color: 'text-blue-600' };
-    if (percentDiff >= -10 && diff < -5) return { type: 'good', text: '⚠️ Um pouco curto', color: 'text-yellow-600' };
+    if (percentDiff >= -10 && diff < 0) return { type: 'excellent', text: '✅ Aceitável', color: 'text-blue-600' };
+    if (percentDiff >= -15 && diff < -10) return { type: 'good', text: '⚠️ Um pouco curto', color: 'text-yellow-600' };
     if (diff > 0) return { type: 'warning', text: '🚨 Excedeu limite', color: 'text-red-600' };
     return { type: 'warning', text: '❌ Muito curto', color: 'text-red-600' };
   };
 
   const status = getStatus();
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-            Gemini Text Adjuster
-          </h1>
-          <p className="text-gray-600 text-lg">
-            Ajuste preciso de caracteres com Google Gemini
-          </p>
-        </div>
+  const tabs = [
+    { id: 'text-adjuster', label: 'Text Adjuster', icon: FileText },
+    { id: 'international-pricing', label: 'International Pricing', icon: Globe },
+  ];
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Input Section */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">Texto Original</h2>
-              <div className="text-sm text-gray-500">
-                {charCount(originalText)} caracteres
-              </div>
-            </div>
-            
-            <textarea
-              value={originalText}
-              onChange={(e) => setOriginalText(e.target.value)}
-              className="w-full h-64 p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
-              placeholder="Cole ou digite seu texto aqui..."
-            />
-
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Alvo de caracteres
-                </label>
-                <input
-                  type="number"
-                  value={targetChars}
-                  onChange={(e) => setTargetChars(parseInt(e.target.value) || 0)}
-                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
-                  min="10"
-                  max="10000"
-                />
-              </div>
-
-              <button
-                onClick={adjustText}
-                disabled={isProcessing}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2"
-              >
-                {isProcessing ? (
-                  <>
-                    <RefreshCw className="w-5 h-5 animate-spin" />
-                    Ajustando... ({iterations}/4)
-                  </>
-                ) : (
-                  'Ajustar Texto'
-                )}
-              </button>
-
-              {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                  <AlertCircle className="w-5 h-5" />
-                  {error}
-                </div>
-              )}
+  const renderTextAdjuster = () => (
+    <div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Input Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">Texto Original</h2>
+            <div className="text-sm text-gray-500">
+              {charCount(originalText)} caracteres
             </div>
           </div>
+          
+          <textarea
+            value={originalText}
+            onChange={(e) => setOriginalText(e.target.value)}
+            className="w-full h-64 p-4 border-2 border-gray-200 rounded-lg resize-none focus:border-blue-500 focus:outline-none"
+            placeholder="Cole ou digite seu texto aqui..."
+          />
 
-          {/* Result Section */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">Texto Ajustado</h2>
-              <div className="flex items-center gap-3">
-                {status && (
-                  <div className={`flex items-center gap-1 text-sm font-medium ${status.color}`}>
-                    {status.type === 'perfect' && <CheckCircle className="w-4 h-4" />}
-                    {status.type === 'excellent' && <CheckCircle className="w-4 h-4" />}
-                    {status.type === 'good' && <Info className="w-4 h-4" />}
-                    {status.type === 'warning' && <AlertCircle className="w-4 h-4" />}
-                    {status.text}
-                  </div>
-                )}
-                <div className="text-sm text-gray-500">
-                  {adjustedText ? charCount(adjustedText) : 0} caracteres
-                </div>
-              </div>
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                Alvo de caracteres:
+              </label>
+              <input
+                type="number"
+                value={targetChars}
+                onChange={(e) => setTargetChars(Math.max(1, parseInt(e.target.value) || 1))}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                min="1"
+                max="10000"
+              />
             </div>
 
-            <textarea
-              value={adjustedText}
-              readOnly
-              className="w-full h-64 p-4 border-2 border-gray-200 rounded-lg bg-gray-50 resize-none"
-              placeholder="O texto ajustado aparecerá aqui..."
-            />
+            <button
+              onClick={adjustText}
+              disabled={!originalText.trim() || isProcessing}
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+            >
+              {isProcessing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Ajustando...
+                </>
+              ) : (
+                'Ajustar Texto'
+              )}
+            </button>
 
-            {adjustedText && (
-              <div className="mt-4 flex gap-3">
-                <button
-                  onClick={copyToClipboard}
-                  className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-                >
-                  {copied ? (
-                    <>
-                      <CheckCircle className="w-4 h-4" />
-                      Copiado!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      Copiar
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={exportToTxt}
-                  className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Exportar .txt
-                </button>
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {error}
               </div>
             )}
           </div>
         </div>
 
-        {/* Info Section */}
-        <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-3">Como Funciona</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-            <div className="flex items-start gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-              <div>
-                <strong>Contagem Word:</strong> TUDO conta (letras, espaços, pontuação, quebras)
-              </div>
-            </div>
-            <div className="flex items-center gap-2 mb-3">
-              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-              <div>
-                <strong>Tolerância:</strong> -5% a 0% (aceitável: {Math.round(targetChars * 0.95)}-{targetChars} chars)
-              </div>
-            </div>
-            <div className="flex items-start gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-              <div>
-                <strong>Validação:</strong> Como no Word "caracteres (incl. espaços)"
+        {/* Output Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">Texto Ajustado</h2>
+            <div className="flex items-center gap-3">
+              {status && (
+                <div className={`flex items-center gap-1 text-sm font-medium ${status.color}`}>
+                  {status.type === 'perfect' && <CheckCircle className="w-4 h-4" />}
+                  {status.type === 'excellent' && <CheckCircle className="w-4 h-4" />}
+                  {status.type === 'good' && <Info className="w-4 h-4" />}
+                  {status.type === 'warning' && <AlertCircle className="w-4 h-4" />}
+                  {status.text}
+                </div>
+              )}
+              <div className="text-sm text-gray-500">
+                {adjustedText ? charCount(adjustedText) : 0} caracteres
               </div>
             </div>
           </div>
+
+          <textarea
+            value={adjustedText}
+            readOnly
+            className="w-full h-64 p-4 border-2 border-gray-200 rounded-lg bg-gray-50 resize-none"
+            placeholder="O texto ajustado aparecerá aqui..."
+          />
+
+          {adjustedText && (
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={copyToClipboard}
+                className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+              >
+                {copied ? (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Copiado!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    Copiar
+                  </>
+                )}
+              </button>
+              <button
+                onClick={exportToTxt}
+                className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Exportar .txt
+              </button>
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* Info Section */}
+      <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">Como Funciona</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+          <div className="flex items-start gap-2">
+            <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+            <div>
+              <strong>Contagem Word:</strong> TUDO conta (letras, espaços, pontuação, quebras)
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mb-3">
+            <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+            <div>
+              <strong>Tolerância:</strong> -10% a 0% (aceitável: {Math.round(targetChars * 0.90)}-{targetChars} chars)
+            </div>
+          </div>
+          <div className="flex items-start gap-2">
+            <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+            <div>
+              <strong>Validação:</strong> Como no Word "caracteres (incl. espaços)"
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="max-w-7xl mx-auto p-4">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+            PX Software Suite
+          </h1>
+          <p className="text-gray-600 text-lg">
+            Text Adjustment & International Pricing Management
+          </p>
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white rounded-lg shadow mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`group inline-flex items-center py-4 px-6 border-b-2 font-medium text-sm ${
+                      activeTab === tab.id
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <Icon className="mr-2 h-5 w-5" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'text-adjuster' ? renderTextAdjuster() : <InternationalPricingDashboard />}
       </div>
     </div>
   );
