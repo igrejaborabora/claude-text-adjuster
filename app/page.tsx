@@ -134,42 +134,52 @@ export default function Home() {
       const lowerBound = Math.round(targetChars * 0.90); // Aumentado para 90%
       const upperBound = targetChars; // Limite estrito
       
-      const systemPrompt = `És um editor profissional especializado em REPHRASE/REESCRITA. Teu objetivo é REFORMULAR o texto para ${targetChars} caracteres, mantendo TODAS as informações e significado original.
+      const systemPrompt = `TAREFA: REPHRASE/REESCRITA COMPLETA (NÃO É RESUMO!)
 
-**REGRA CRÍTICA: NUNCA EXCEDER ${targetChars} CARACTERES**
-**REGRA ESSENCIAL: MANTER TODO O CONTEXTO E INFORMAÇÃO**
+**REGRAS ABSOLUTAS:**
+1. NUNCA EXCEDER ${targetChars} caracteres
+2. MANTER 100% DAS INFORMAÇÕES ORIGINAIS
+3. APENAS reformular a FORMA de escrever, NUNCA o conteúdo
 
-- Alvo: ${targetChars} caracteres (faixa aceitável: ${lowerBound}-${targetChars})
-- Se exceder: REESCREVE mais conciso
-- Se ficar curto: EXPANDE com detalhes
-- NUNCA CORTAR/TRUNCAR - sempre REESCREVER
+**DIFERENÇA CRÍTICA - REPHRASE vs RESUMO:**
 
-**IMPORTANTE - ISTO NÃO É UM RESUMO:**
-❌ NÃO remover informações
-❌ NÃO fazer resumo
-❌ NÃO truncar/cortar texto
-✅ REESCREVER mantendo tudo
-✅ CONDENSAR através de reformulação
-✅ TODAS as informações devem aparecer
+❌ RESUMO (ERRADO):
+- Remove informações "menos importantes"
+- Elimina detalhes, números, datas
+- Resultado: menos informação
 
-**TÉCNICAS DE CONDENSAÇÃO (quando reduzir):**
-1. Substituir frases longas por equivalentes curtas
-2. Usar sinônimos mais concisos
-3. Combinar frases relacionadas
-4. Eliminar redundâncias de forma natural
-5. Manter todos os números, datas, valores
-6. Preservar todas as ideias principais e secundárias
+✅ REPHRASE (CORRETO):
+- Mantém TODAS as informações
+- Reformula usando palavras diferentes
+- Resultado: mesma informação, forma diferente
 
-**TÉCNICAS DE EXPANSÃO (quando aumentar):**
-1. Adicionar contexto relevante
-2. Detalhar informações existentes
-3. Explicar conceitos mencionados
-4. Incluir exemplos concretos
+**EXEMPLO PRÁTICO:**
 
-**FORMATO:**
-- Texto contínuo e coeso
-- ${targetChars} caracteres (±10%)
-- NUNCA exceder ${targetChars}`;
+Original (50 chars): "A empresa, sediada em Lisboa, foi fundada em 2020"
+
+❌ Resumo ERRADO (25 chars): "Empresa fundada em 2020" 
+   → Perdeu "Lisboa"!
+
+✅ Rephrase CORRETO (35 chars): "Empresa de Lisboa, fundada em 2020"
+   → Manteve TUDO, apenas reformulou!
+
+**TÉCNICAS OBRIGATÓRIAS:**
+1. "microempresa do Porto" → "microempresa portuense"
+2. "que representa um investimento de" → "investimento de"
+3. "A executar entre março de 2026 e fevereiro de 2028" → "Entre março/2026-fevereiro/2028"
+4. Eliminar apenas: artigos redundantes, conectivos excessivos
+5. NUNCA eliminar: nomes, números, datas, valores, percentagens
+
+**CHECKLIST OBRIGATÓRIO:**
+Antes de responder, verifica se o texto tem:
+✅ Todos os nomes próprios
+✅ Todos os números e valores
+✅ Todas as datas e períodos
+✅ Todas as percentagens
+✅ Todas as entidades mencionadas
+✅ Todas as ações e objetivos
+
+**META:** ${targetChars} caracteres (±10%) com 100% de informação`;
 
       const userPrompt = `TEXTO ORIGINAL (${originalCount} caracteres):
 ${originalNorm}
