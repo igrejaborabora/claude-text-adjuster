@@ -29,11 +29,35 @@ export default function GeminiTextAdjuster() {
     return Math.ceil(charCount(s) / 4);
   };
 
-  // Hard cap determinístico: garante que o texto nunca excede 'max' caracteres
-  const hardCapToMax = (s: string, max: number): string => {
+  // Converte para texto contínuo (sem quebras de linha). Não colapsa espaços e não trim para manter contagem fiel.
+  const toContinuous = (s: string): string => {
     const n = normalizeForCount(s);
+    return n.replace(/\n+/g, ' ');
+  };
+
+  // Hard cap "inteligente": corta no máximo 'max' e tenta finalizar em limite natural (pontuação/espaço)
+  const hardCapToMax = (s: string, max: number): string => {
+    const n = toContinuous(s);
     if (n.length <= max) return n;
-    return n.slice(0, max);
+    let slice = n.slice(0, max);
+    const windowStart = Math.max(0, max - 40);
+    const win = slice.slice(windowStart);
+    const candidates = [
+      win.lastIndexOf('.'),
+      win.lastIndexOf('!'),
+      win.lastIndexOf('?'),
+      win.lastIndexOf(';'),
+      win.lastIndexOf(':'),
+      win.lastIndexOf(','),
+      win.lastIndexOf('—'),
+      win.lastIndexOf('-'),
+      win.lastIndexOf(' ')
+    ];
+    const idx = Math.max(...candidates);
+    if (idx !== -1) {
+      return slice.slice(0, windowStart + idx + 1).trim();
+    }
+    return slice;
   };
 
   // Copiar para clipboard
@@ -102,11 +126,15 @@ export default function GeminiTextAdjuster() {
       const originalNorm = normalizeForCount(originalText);
       const originalCount = charCount(originalNorm);
       const diffNeeded = targetChars - originalCount;
+      const lowerBound = Math.round(targetChars * 0.95);
       
-      const systemPrompt = `És um editor profissional de excelência. Ajusta o texto para ${Math.round(targetChars * 0.98)} caracteres.
+      const systemPrompt = `És um editor profissional de excelência. Ajusta o texto para ficar ENTRE ${lowerBound} e ${targetChars} caracteres, preferindo ficar o mais próximo possível de ${targetChars} SEM NUNCA EXCEDER.
 
-⚠️ LIMITE ABSOLUTO CRÍTICO: ${targetChars} caracteres (NUNCA EXCEDER)
-✅ ALVO OBRIGATÓRIO: ${Math.round(targetChars * 0.98)} caracteres (98% do limite)
+TOLERÂNCIA E OBJETIVO:
+- Tolerância aceita: [-5%, 0%] ⇒ ${lowerBound} a ${targetChars}
+- Preferência: 99%-100% do alvo (ideal: ${targetChars - 2} a ${targetChars - 0})
+- Proibido exceder ${targetChars}
+- Proibido truncar palavras: NUNCA cortar caracteres "no meio"; reescreve/condensa em vez de cortar
 
 MÉTODO DE CONTAGEM (COMO NO WORD):
 - LETRAS: A-Z, a-z, com acentos, ç, ñ, etc.
@@ -119,21 +147,10 @@ MÉTODO DE CONTAGEM (COMO NO WORD):
 - NÚMEROS: 0-9 = 1 caractere cada
 - SÍMBOLOS: @ # $ % & * + = / \\ < > ~ ^ \` | = 1 caractere
 
-FAIXAS DE RESULTADO:
-1. ✅✅✅ PERFEITO: ${Math.round(targetChars * 0.97)} a ${Math.round(targetChars * 0.98)} caracteres (97%-98%)
-2. ✅✅ MUITO BOM: ${Math.round(targetChars * 0.95)} a ${Math.round(targetChars * 0.96)} caracteres (95%-96%)
-3. ✅ BOM: ${Math.round(targetChars * 0.92)} a ${Math.round(targetChars * 0.94)} caracteres (92%-94%)
-4. ⚠️ ACEITÁVEL: ${Math.round(targetChars * 0.90)} a ${Math.round(targetChars * 0.91)} caracteres (90%-91%)
-5. ❌ MUITO CURTO: Menos de ${Math.round(targetChars * 0.85)} caracteres (<85%)
-6. ❌ PROIBIDO: ${targetChars} ou mais caracteres (NUNCA!)
-
-ESTRATÉGIA:
-- ALVO PRINCIPAL: ${Math.round(targetChars * 0.98)} caracteres (98%)
-- Se o texto original é MAIOR que ${targetChars}: REDUZ para ${Math.round(targetChars * 0.98)}
-- Se o texto original é MENOR que ${targetChars}: EXPANDE para ${Math.round(targetChars * 0.98)}
-- NUNCA tenta chegar a ${targetChars} - deixa buffer de segurança de 2% (${Math.round(targetChars * 0.02)} chars)
-- IMPORTANTE: Conta os caracteres DURANTE a edição - objetivo é ${Math.round(targetChars * 0.98)}!
-- MAXIMIZA INFORMAÇÃO: Usa o máximo de espaço disponível (98%), não sejas conservador!
+ESTRATÉGIA DE AJUSTE SEM TRUNCAR PALAVRAS:
+- Se ficar ACIMA de ${targetChars}: reescreve/condensa o último parágrafo primeiro; depois o penúltimo, e assim sucessivamente até ficar ≤ ${targetChars}. Nunca cortar palavras; alterar redação para reduzir.
+- Se ficar ABAIXO de ${lowerBound}: expande o último parágrafo com detalhes concretos; se necessário, expande o penúltimo; mantém coerência e fluxo.
+- Se cair entre ${lowerBound} e ${targetChars}: aceitar.
 
 QUALIDADE E FORMATO:
 1. Mantém informações ESSENCIAIS
@@ -144,47 +161,24 @@ QUALIDADE E FORMATO:
 6. Sem "Gemini 2.5 Flash: preciso e rápido"
 7. Output: APENAS o texto final
 
-VALIDAÇÃO: Está entre ${Math.round(targetChars * 0.95)} e ${Math.round(targetChars * 0.98)} caracteres?`;
+VALIDAÇÃO: Está entre ${lowerBound} e ${targetChars} caracteres ([-5%, 0%])?`;
 
       const userPrompt = `TEXTO ORIGINAL (${originalCount} caracteres):
 ${originalNorm}
 
-📊 CÁLCULO EXATO:
-- Original: ${originalCount} caracteres
-- Limite máximo: ${targetChars} caracteres  
-- Alvo obrigatório: ${Math.round(targetChars * 0.98)} caracteres (98%)
-- ${originalCount > targetChars ? 
-    `Cortar APENAS: ${originalCount - Math.round(targetChars * 0.98)} caracteres (não ${originalCount - Math.round(targetChars * 0.60)}!)` : 
-    `Adicionar: ${Math.round(targetChars * 0.98) - originalCount} caracteres`}
+📊 Objetivo e tolerância:
+- Alvo: ${targetChars} (nunca exceder)
+- Tolerância aceita: ${lowerBound}–${targetChars} ([-5%, 0%])
 
-⚠️ ATENÇÃO CRÍTICA: ${originalCount > targetChars ? 
-  `NÃO CORTES DEMAIS! Corta apenas ${originalCount - Math.round(targetChars * 0.98)} caracteres!
-  - Se cortares ${originalCount - Math.round(targetChars * 0.60)} = ERRO! Muito curto!
-  - Resultado OBRIGATÓRIO: ${Math.round(targetChars * 0.98)} caracteres (não ${Math.round(targetChars * 0.60)}!)` :
-  `Adiciona ${Math.round(targetChars * 0.98) - originalCount} caracteres até ${Math.round(targetChars * 0.98)}!`}
-
-ESTRATÉGIA ESPECÍFICA:
+ESTRATÉGIA ESPECÍFICA (SEM CORTAR PALAVRAS):
 ${originalCount > targetChars ? 
-  `✅ REDUZIR de ${originalCount} para ${Math.round(targetChars * 0.98)} caracteres:
-  
-  PASSO 1: Identifica O QUE CORTAR (total: ${originalCount - Math.round(targetChars * 0.98)} caracteres):
-  - Frases secundárias menos importantes (~${Math.round((originalCount - Math.round(targetChars * 0.98)) * 0.5)} chars)
-  - Detalhes redundantes (~${Math.round((originalCount - Math.round(targetChars * 0.98)) * 0.3)} chars)
-  - Exemplos menos críticos (~${Math.round((originalCount - Math.round(targetChars * 0.98)) * 0.2)} chars)
-  
-  PASSO 2: O QUE MANTER (${Math.round(targetChars * 0.98)} caracteres = 98%):
-  - TODA a informação principal e essencial
-  - Estrutura e lógica do texto
-  - Conceitos e dados críticos
-  - 98% do conteúdo, não 60%!
-  
-  ⚠️ VALIDAÇÃO: Depois de cortar, CONTA os caracteres:
-  - Deve ter ${Math.round(targetChars * 0.98)} caracteres
-  - Se tiver ${Math.round(targetChars * 0.60)}: ERRO! Cortaste demais!
-  - Se tiver ${targetChars + 1}: ERRO! Excedeu limite!` : 
-  `✅ EXPANDIR de ${originalCount} para ${Math.round(targetChars * 0.98)} caracteres:
-  - Adiciona ${Math.round(targetChars * 0.98) - originalCount} caracteres de detalhes relevantes
-  - Para ao atingir ${Math.round(targetChars * 0.98)} - não exagera!`
+  `✅ Texto maior que o alvo: reescreve e condensa o ÚLTIMO parágrafo primeiro.
+  - Se ainda exceder, condensa o penúltimo, e assim sucessivamente
+  - Remove redundâncias e frases periféricas por reescrita (não por truncamento)
+  - Para quando ficar entre ${lowerBound} e ${targetChars}` :
+  `✅ Texto menor que o alvo: expande o ÚLTIMO parágrafo com detalhes concretos (dados, exemplos, benefícios)
+  - Se ainda faltar, expande o penúltimo parágrafo
+  - Para quando ficar entre ${lowerBound} e ${targetChars}`
 }
 
 FORMATO FINAL:
@@ -194,52 +188,35 @@ FORMATO FINAL:
 4. NUNCA adiciona "Gemini 2.5 Flash"
 5. Output: APENAS o texto editado
 
-OBJETIVO OBRIGATÓRIO: ${Math.round(targetChars * 0.98)} caracteres (98%), NUNCA ${targetChars}+ nem ${Math.round(targetChars * 0.60)}-!`;
+OBJETIVO: Ficar entre ${lowerBound} e ${targetChars} caracteres; preferir ${targetChars - 2} a ${targetChars}.`;
 
       let result = await callAdjustAPI(systemPrompt, userPrompt);
       setIterations(1);
 
-      // Loop de ajuste fino - corta agressivamente se exceder
-      for (let i = 2; i <= 4; i++) {
+      // Loop de ajuste fino - mais iterações para convergir melhor
+      for (let i = 2; i <= 6; i++) {
         const resultNorm = normalizeForCount(result);
         const resultCount = charCount(resultNorm);
         const diff = resultCount - targetChars;
         const percentDiff = (diff / targetChars) * 100;
         
-        // Se excedeu o limite: CORTAR IMEDIATAMENTE
+        // Se excedeu o limite: REESCREVER/CONDENSAR (sem truncar palavras)
         if (diff > 0) {
-          const fineSystem = `EMERGÊNCIA - TEXTO EXCEDEU O LIMITE
+          const fineSystem = `AJUSTE FINO – TEXTO ACIMA DO LIMITE (SEM TRUNCAR PALAVRAS)
 
-❌❌❌ PROBLEMA CRÍTICO: Texto tem ${resultCount} caracteres mas limite é ${targetChars}!
-❌ EXCEDEU EM: ${diff} caracteres (${Math.abs(percentDiff).toFixed(1)}% acima)
+Situação: ${resultCount} > ${targetChars} (excedeu em ${diff} = ${Math.abs(percentDiff).toFixed(1)}%)
+Objetivo: Reescrever/condensar até ficar ENTRE ${lowerBound} e ${targetChars}, preferindo ${targetChars - 2} a ${targetChars}
+Método: Reescreve o ÚLTIMO parágrafo primeiro; se necessário o penúltimo, e assim por diante. Não cortar palavras, apenas reescrever para reduzir.
+Formato: Texto contínuo, profissional, coerente.`;
 
-AÇÃO IMEDIATA OBRIGATÓRIA:
-- CORTAR APENAS ${resultCount - Math.round(targetChars * 0.98)} caracteres para chegar a ${Math.round(targetChars * 0.98)}
-- Alvo de corte: ${Math.round(targetChars * 0.98)} caracteres (98% - margem de 2%)
-- Remove frases finais, detalhes secundários, exemplos menos importantes
-- NUNCA pode ficar com mais de ${targetChars - 1} caracteres
-
-MÉTODO DE CORTE:
-1. Identifica frases/palavras menos essenciais no final
-2. Remove APENAS ${resultCount - Math.round(targetChars * 0.98)} caracteres
-3. Resultado: ${Math.round(targetChars * 0.98)} caracteres
-4. TEXTO CONTÍNUO sem quebras
-5. Verifica: está em ${Math.round(targetChars * 0.98)} caracteres?`;
-
-          const fineUser = `TEXTO QUE EXCEDEU (${resultCount} chars):
+          const fineUser = `TEXTO ACIMA DO LIMITE (${resultCount} chars):
 ${resultNorm}
 
-❌ EXCEDEU EM: ${diff} caracteres
-❌ LIMITE: ${targetChars} caracteres
-✅ ALVO DE CORTE: ${Math.round(targetChars * 0.98)} caracteres (98%)
-
-CORTA APENAS ${resultCount - Math.round(targetChars * 0.98)} caracteres até ficar com ${Math.round(targetChars * 0.98)}:
-- Frases finais menos importantes
-- Detalhes secundários
-- Exemplos redundantes
-- Mantém informação essencial
-
-DEVOLVE texto com ${Math.round(targetChars * 0.98)} caracteres (não ${Math.round(targetChars * 0.60)}!)!`;
+TAREFA:
+- Reduzir por reescrita/condensação (sem truncar palavras)
+- Parar quando estiver entre ${lowerBound} e ${targetChars}
+- Preferir ${targetChars - 2} a ${targetChars}
+- Manter informação essencial e coerência`;
 
           const fineResponse = await fetch('/api/adjust', {
             method: 'POST',
@@ -260,46 +237,40 @@ DEVOLVE texto com ${Math.round(targetChars * 0.98)} caracteres (não ${Math.roun
           continue;
         }
 
-        // Se estiver dentro da tolerância [-3%, -1%] (97%-99%) aceitar
-        if (percentDiff >= -3 && percentDiff <= -1) break;
+        // Parar se dentro da tolerância [-5%, 0%]
+        if (percentDiff >= -5 && diff <= 0) break;
 
-        // Se estiver muito curto (< -3%), expandir até 98%
-        if (percentDiff < -3) {
-          const target98 = Math.round(targetChars * 0.98);
-          const charsNeeded = target98 - resultCount;
+        // Se estiver curto além da tolerância (< -5%), expandir até a faixa superior sem exceder
+        if (percentDiff < -5) {
+          const targetHigh = targetChars - 1; // preferir topo da faixa sem exceder
+          const targetLow = lowerBound;
+          const desired = Math.max(targetLow, targetHigh);
+          const charsNeeded = desired - resultCount;
           if (charsNeeded <= 0) break;
 
-          const fineSystem = `EMERGÊNCIA - TEXTO MUITO CURTO
+          const fineSystem = `AJUSTE FINO – TEXTO ABAIXO DA FAIXA (EXPANDIR EXATAMENTE)
 
-Texto atual: ${resultCount} caracteres (${(resultCount / targetChars * 100).toFixed(1)}% do limite)
-FALTAM: ${charsNeeded} caracteres para atingir ${target98} (98%)
+Texto atual: ${resultCount} caracteres (${(resultCount / targetChars * 100).toFixed(1)}% do alvo)
+FALTAM: ${charsNeeded} caracteres para atingir a faixa superior (${desired})
 
-AÇÃO IMEDIATA:
-- ADICIONAR ${charsNeeded} caracteres RELEVANTES agora
-- Objetivo final obrigatório: ${target98} caracteres (98%)
-- NUNCA ultrapassar ${targetChars - 1}
+Ação: ADICIONAR EXATAMENTE ${charsNeeded} caracteres (±2) via conteúdo relevante.
+- Expande o ÚLTIMO parágrafo com detalhes concretos (dados, benefícios, exemplos)
+- Se ainda faltar, expande o penúltimo
+- Mantém coerência e fluxo lógico
+- Evita repetições/enchimento
+- Formato contínuo (sem \n)
+- Não exceder ${targetChars - 1}`;
 
-COMO EXPANDIR:
-1. Reintroduz detalhes essenciais removidos
-2. Acrescenta contexto, benefícios, métricas, exemplos concretos
-3. Mantém coerência e fluxo lógico
-4. Evita repetições e encheção
-5. Texto contínuo, sem quebras de linha
-6. Após expandir, confere: ficou entre ${Math.round(targetChars * 0.97)} e ${target98}?`;
-
-          const fineUser = `TEXTO MUITO CURTO (${resultCount} caracteres):
+          const fineUser = `TEXTO ABAIXO DA FAIXA (${resultCount} caracteres):
 ${resultNorm}
 
-PRECISA ADICIONAR: ${charsNeeded} caracteres
-ALVO FINAL: ${target98} caracteres (98%)
-
-ADICIONA informação relevante:
-- Detalhes estratégicos
-- Resultados esperados
-- Benefícios, impactos, métricas
-- Contexto adicional e conclusões
-
-DEVOLVE texto com ${target98} caracteres (aceitável: ${Math.round(targetChars * 0.97)}-${target98}), SEM ultrapassar ${targetChars - 1}.`;
+ADICIONAR EXATAMENTE: ${charsNeeded} caracteres (tolerância ±2)
+ALVO: ${desired} caracteres (topo da faixa, sem exceder)
+REGRAS:
+- Usa detalhes concretos (resultados, métricas, exemplos, impactos)
+- Mantém coerência e evita redundâncias
+- Texto contínuo (sem quebras de linha)
+DEVOLVE apenas o texto expandido.`;
 
           const fineResponse = await fetch('/api/adjust', {
             method: 'POST',
@@ -324,8 +295,7 @@ DEVOLVE texto com ${target98} caracteres (aceitável: ${Math.round(targetChars *
         break;
       }
 
-      let finalResult = normalizeForCount(result);
-      finalResult = hardCapToMax(finalResult, targetChars);
+      let finalResult = hardCapToMax(result, targetChars);
       setAdjustedText(finalResult);
 
     } catch (err: any) {
