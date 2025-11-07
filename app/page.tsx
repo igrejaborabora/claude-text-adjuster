@@ -29,6 +29,13 @@ export default function GeminiTextAdjuster() {
     return Math.ceil(charCount(s) / 4);
   };
 
+  // Hard cap determinístico: garante que o texto nunca excede 'max' caracteres
+  const hardCapToMax = (s: string, max: number): string => {
+    const n = normalizeForCount(s);
+    if (n.length <= max) return n;
+    return n.slice(0, max);
+  };
+
   // Copiar para clipboard
   const copyToClipboard = async () => {
     try {
@@ -317,7 +324,8 @@ DEVOLVE texto com ${target98} caracteres (aceitável: ${Math.round(targetChars *
         break;
       }
 
-      const finalResult = normalizeForCount(result);
+      let finalResult = normalizeForCount(result);
+      finalResult = hardCapToMax(finalResult, targetChars);
       setAdjustedText(finalResult);
 
     } catch (err: any) {
