@@ -96,7 +96,7 @@ export default function GeminiTextAdjuster() {
       const originalCount = charCount(originalNorm);
       const diffNeeded = targetChars - originalCount;
       
-      const systemPrompt = `És um editor profissional de excelência. Ajusta o texto para dentro da tolerância [-5%, 0%] do alvo de ${targetChars} caracteres.
+      const systemPrompt = `És um editor profissional de excelência. Ajusta o texto para O MAIS PERTO POSSÍVEL de ${targetChars} caracteres.
 
 MÉTODO DE CONTAGEM (COMO NO WORD):
 - LETRAS: A-Z, a-z, com acentos, ç, ñ, etc.
@@ -109,23 +109,28 @@ MÉTODO DE CONTAGEM (COMO NO WORD):
 - NÚMEROS: 0-9 = 1 caractere cada
 - SÍMBOLOS: @ # $ % & * + = / \\ < > ~ ^ \` | = 1 caractere
 
-TOLERÂNCIA E QUALIDADE:
-1. Alvo ideal: ${targetChars} caracteres
-2. Aceitável: ${Math.round(targetChars * 0.95)} a ${targetChars} caracteres (-5% a 0%)
-3. NUNCA exceder ${targetChars} caracteres (limite máximo)
-4. Mantém 100% do sentido e informações ESSENCIAIS
-5. Preserva a estrutura lógica e fluxo narrativo
-6. Evita repetições e redundâncias
-7. Linguagem profissional e clara
-8. TEXTO CONTÍNUO: Sem parágrafos, sem quebras de linha, tudo em um único bloco
-9. Sem trim(), sem "...", sem "###", sem aspas, sem "Gemini 2.5 Flash: preciso e rápido"
-10. Output: APENAS o texto final contínuo, sem explicações
+OBJETIVO PRIORITÁRIO - MAXIMIZAR CARACTERES:
+1. ALVO IDEAL: ${targetChars} caracteres (100% do objetivo)
+2. MÍNIMO ACEITÁVEL: ${Math.round(targetChars * 0.95)} caracteres (95% - só se inevitável)
+3. NUNCA exceder ${targetChars} caracteres (limite máximo absoluto)
+4. PRIORIDADE: Chegar O MAIS PERTO POSSÍVEL de ${targetChars} (ideal: ${targetChars - 5} a ${targetChars})
 
-EXEMPLOS DE CONTAGEM:
-- "Hello world" = 11 caracteres (5 + 1 + 5)
-- "Hello, world!" = 13 caracteres (5 + 1 + 1 + 1 + 5 + 1 + 1)
+ESTRATÉGIA PARA ATINGIR O ALVO:
+- Se faltar caracteres: Adiciona detalhes relevantes, contexto, exemplos, dados complementares
+- Se sobrar muito: Remove apenas redundâncias óbvias, mantém máximo de informação
+- Prefere SEMPRE estar entre ${targetChars - 10} e ${targetChars} caracteres
+- Evita ser muito conservador - usa todo o espaço disponível
 
-VALIDAÇÃO: Depois de escrever, conta MANUALMENTE: está entre ${Math.round(targetChars * 0.95)} e ${targetChars} caracteres?`;
+QUALIDADE E FORMATO:
+1. Mantém 100% do sentido e informações ESSENCIAIS
+2. Preserva a estrutura lógica e fluxo narrativo
+3. Evita repetições e redundâncias
+4. Linguagem profissional e clara
+5. TEXTO CONTÍNUO: Sem parágrafos, sem quebras de linha, tudo em um único bloco
+6. Sem trim(), sem "...", sem "###", sem aspas, sem "Gemini 2.5 Flash: preciso e rápido"
+7. Output: APENAS o texto final contínuo, sem explicações
+
+VALIDAÇÃO: Depois de escrever, conta MANUALMENTE: está entre ${Math.round(targetChars * 0.95)} e ${targetChars} caracteres? Prioriza estar próximo de ${targetChars}!`;
 
       const userPrompt = `TEXTO ORIGINAL (${originalCount} caracteres):
 ${originalNorm}
@@ -137,19 +142,29 @@ ANÁLISE DA CONTAGEM ATUAL:
 - Outros: ${originalCount - originalNorm.replace(/[^a-zA-Zà-ÿ]/g, '').length - (originalNorm.split(' ').length - 1) - (originalNorm.split('\n').length - 1)}
 
 AJUSTE NECESSÁRIO: ${diffNeeded > 0 ? '+' : ''}${diffNeeded} caracteres
-ALVO IDEAL: ${targetChars} caracteres
-TOLERÂNCIA ACEITÁVEL: ${Math.round(targetChars * 0.95)} a ${targetChars} caracteres (-5% a 0%)
+ALVO IDEAL: ${targetChars} caracteres (100%)
+FAIXA PREFERENCIAL: ${targetChars - 10} a ${targetChars} caracteres (99%-100%)
+MÍNIMO ACEITÁVEL: ${Math.round(targetChars * 0.95)} caracteres (95%)
 LIMITE MÁXIMO: ${targetChars} caracteres (NUNCA EXCEDER)
 
-EDIT PROFISSIONAL NECESSÁRIO:
+EDIT PROFISSIONAL - MAXIMIZAR CARACTERES:
 ${diffNeeded > 0 ? 
-  `✅ PRECISA EXPANDIR: Adicionar ${diffNeeded} caracteres com informações relevantes` : 
+  `✅ PRECISA EXPANDIR: Adicionar ${diffNeeded} caracteres (${Math.abs(diffNeeded / targetChars * 100).toFixed(1)}%)
+  - Adiciona detalhes relevantes, contexto, exemplos concretos
+  - Expande conceitos importantes com informações complementares
+  - Usa todo o espaço disponível sem ser repetitivo
+  - OBJETIVO: Chegar o mais perto possível de ${targetChars} caracteres` : 
   diffNeeded < -Math.round(targetChars * 0.05) ?
-    `✅ PRECISA REDUZIR: Remover ${Math.abs(diffNeeded)} caracteres (muito curto)` :
-    `✅ DENTRO DA TOLERÂNCIA: Texto está em faixa aceitável`
+    `✅ PRECISA REDUZIR: Remover ${Math.abs(diffNeeded)} caracteres (texto muito curto)
+    - Remove apenas redundâncias óbvias
+    - Mantém máximo de informação possível
+    - OBJETIVO: Ficar entre ${Math.round(targetChars * 0.95)} e ${targetChars} caracteres` :
+    `✅ DENTRO DA TOLERÂNCIA: Texto está em faixa aceitável
+    - Ajuste fino para aproximar de ${targetChars} caracteres
+    - Maximiza uso do espaço disponível`
 }
 
-MÉTODO DE EDIÇÃO:
+MÉTODO DE EDIÇÃO - PRIORIDADE MÁXIMA:
 1. Preservar INFORMAÇÕES ESSENCIAIS e dados críticos
 2. Manter estrutura lógica e fluxo narrativo
 3. Evitar repetições e frases redundantes
@@ -158,9 +173,10 @@ MÉTODO DE EDIÇÃO:
 6. NUNCA exceder ${targetChars} caracteres
 7. TEXTO CONTÍNUO OBRIGATÓRIO: Remover todas as quebras de linha, juntar tudo em um único parágrafo
 8. NUNCA adicionar "Gemini 2.5 Flash: preciso e rápido" ou qualquer texto extra
-9. Verificar: está entre ${Math.round(targetChars * 0.95)} e ${targetChars} caracteres?
+9. MAXIMIZAR: Usar todo o espaço disponível - objetivo é ${targetChars}, não ${Math.round(targetChars * 0.95)}!
+10. Verificar: está entre ${targetChars - 10} e ${targetChars} caracteres? (faixa ideal)
 
-Devolve APENAS o texto editado contínuo (sem quebras de linha) dentro da tolerância [-5%, 0%] com qualidade profissional.`;
+Devolve APENAS o texto editado contínuo (sem quebras de linha) O MAIS PRÓXIMO POSSÍVEL de ${targetChars} caracteres com qualidade profissional.`;
 
       let result = await callAdjustAPI(systemPrompt, userPrompt);
       setIterations(1);
@@ -175,60 +191,88 @@ Devolve APENAS o texto editado contínuo (sem quebras de linha) dentro da toler�
         // Parar se estiver dentro da tolerância [-5%, 0%]
         if (percentDiff >= -5 && percentDiff <= 0) break;
 
-        const fineSystem = `AJUSTE FINO - EDIÇÃO PROFISSIONAL COM TOLERÂNCIA
+        const fineSystem = `AJUSTE FINO - MAXIMIZAR CARACTERES
 
-SITUAÇÃO ATUAL: Texto tem ${resultCount} caracteres (${percentDiff.toFixed(1)}% do alvo)
-ALVO: ${targetChars} caracteres (tolerância: -5% a 0%)
-DIFERENÇA: ${diff > 0 ? `EXCEDEU em ${diff}` : `PRECISA de ${Math.abs(diff)}`}
+SITUAÇÃO ATUAL: Texto tem ${resultCount} caracteres (${(resultCount / targetChars * 100).toFixed(1)}% do alvo)
+ALVO: ${targetChars} caracteres (100%)
+FAIXA IDEAL: ${targetChars - 10} a ${targetChars} caracteres (99%-100%)
+DIFERENÇA: ${diff > 0 ? `EXCEDEU em ${diff}` : `FALTAM ${Math.abs(diff)}`}
 
-EDIÇÃO DE QUALIDADE:
+OBJETIVO PRIORITÁRIO:
+- IDEAL: ${targetChars} caracteres (100% do objetivo)
+- MUITO BOM: ${targetChars - 5} a ${targetChars} caracteres (99.5%-100%)
+- ACEITÁVEL: ${Math.round(targetChars * 0.95)} a ${targetChars - 6} caracteres (95%-99.4%)
+- EVITAR: Menos de ${Math.round(targetChars * 0.95)} caracteres (<95%)
+
+EDIÇÃO DE QUALIDADE - MAXIMIZAÇÃO:
 - Preservar INFORMAÇÕES ESSENCIAIS e dados críticos
 - Manter estrutura lógica e fluxo narrativo 
 - Evitar repetições e frases redundantes
 - Linguagem profissional e coerente
 - Contar TUDO: letras, espaços, pontuação, quebras, símbolos
-- Espaços antes/depois de travessões contam
-- Quebras de linha (\\n) contam como 1 caractere
-- Sem trim() - espaços início/fim contam
 - TEXTO CONTÍNUO OBRIGATÓRIO: Sem parágrafos, sem quebras de linha
 - NUNCA adicionar "Gemini 2.5 Flash: preciso e rápido"
+- USA TODO O ESPAÇO DISPONÍVEL - não sejas conservador!
 
 CORREÇÃO NECESSÁRIA:
 ${diff > 0 ? 
-  `❌ REDUZIR ${diff} caracteres: texto excedeu o limite máximo` : 
+  `❌ REDUZIR ${diff} caracteres: texto excedeu o limite máximo - corta palavras extras` : 
   percentDiff < -5 ? 
-    `❌ AUMENTAR ${Math.abs(diff)} caracteres: texto muito curto (-${Math.abs(percentDiff).toFixed(1)}%)` :
-    `✅ DENTRO DA TOLERÂNCIA: -${Math.abs(percentDiff).toFixed(1)}% (aceitável)`
+    `⚠️ AUMENTAR ${Math.abs(diff)} caracteres: texto está em ${(resultCount / targetChars * 100).toFixed(1)}%
+    - Adiciona detalhes, contexto, exemplos relevantes
+    - Expande informações importantes
+    - USA TODO O ESPAÇO até ${targetChars} caracteres
+    - Objetivo: ${targetChars} caracteres (100%), não ${Math.round(targetChars * 0.95)} (95%)` :
+    diff < -10 ?
+      `✅ PRÓXIMO: Faltam apenas ${Math.abs(diff)} caracteres para ${targetChars}
+      - Adiciona detalhes finais para maximizar
+      - Objetivo: ${targetChars} caracteres exatos` :
+      `✅ EXCELENTE: Está em ${(resultCount / targetChars * 100).toFixed(1)}% do alvo
+      - Ajuste mínimo se necessário
+      - Mantém perto de ${targetChars} caracteres`
 }
 
-OBJETIVO: Ajustar para dentro da tolerância [-5%, 0%] mantendo qualidade e TEXTO CONTÍNUO.`;
+OBJETIVO: Chegar O MAIS PRÓXIMO POSSÍVEL de ${targetChars} caracteres (ideal: ${targetChars - 5} a ${targetChars}).`;
 
-        const fineUser = `TEXTO ATUAL (ANÁLISE COM TOLERÂNCIA):
+        const fineUser = `TEXTO ATUAL (PRECISA MAXIMIZAR):
 ${resultNorm}
 
-CONTAGEM REAL: ${resultCount} caracteres (${percentDiff.toFixed(1)}% do alvo)
-ALVO: ${targetChars} caracteres (tolerância: -5% a 0%)
-SITUAÇÃO: ${diff > 0 ? `EXCEDEU limite em ${diff} caracteres` : 
-           percentDiff < -5 ? `MUITO CURTO: -${Math.abs(percentDiff).toFixed(1)}% (precisa de ${Math.abs(diff)} caracteres)` :
-           `DENTRO DA TOLERÂNCIA: -${Math.abs(percentDiff).toFixed(1)}% (aceitável)`}
+ANÁLISE ATUAL:
+- CONTAGEM: ${resultCount} caracteres (${(resultCount / targetChars * 100).toFixed(1)}% do alvo)
+- ALVO: ${targetChars} caracteres (100%)
+- FALTAM: ${Math.abs(diff)} caracteres para atingir o alvo
+- SITUAÇÃO: ${diff > 0 ? `⚠️ EXCEDEU limite em ${diff} caracteres - PRECISA REDUZIR` : 
+           percentDiff < -10 ? `⚠️ MUITO ABAIXO: Está em ${(resultCount / targetChars * 100).toFixed(1)}% - PRECISA MAXIMIZAR` :
+           percentDiff < -5 ? `⚠️ ABAIXO: Está em ${(resultCount / targetChars * 100).toFixed(1)}% - ADICIONA MAIS ${Math.abs(diff)} CARACTERES` :
+           diff < -5 ? `✅ PRÓXIMO: Faltam ${Math.abs(diff)} caracteres para perfeição` :
+           `✅ EXCELENTE: Está em ${(resultCount / targetChars * 100).toFixed(1)}% do alvo`}
 
-EDIÇÃO NECESSÁRIA:
+AÇÃO NECESSÁRIA:
 ${diff > 0 ? 
-  `REDUZIR ${diff} caracteres: texto excedeu o limite máximo` : 
-  percentDiff < -5 ?
-    `AUMENTAR ${Math.abs(diff)} caracteres: texto está muito curto` :
-    `MANTER: texto está dentro da tolerância aceitável`
+  `❌ REDUZIR ${diff} caracteres: Corta palavras extras sem perder sentido` : 
+  percentDiff < -10 ?
+    `⚠️ AUMENTAR ${Math.abs(diff)} caracteres: MAXIMIZA O TEXTO
+    - Adiciona contexto, detalhes, exemplos concretos
+    - Expande conceitos importantes
+    - USA TODO O ESPAÇO até ${targetChars} caracteres
+    - NÃO SEJAS CONSERVADOR - o objetivo é ${targetChars}, não ${Math.round(targetChars * 0.95)}!` :
+    percentDiff < -5 ?
+      `⚠️ AUMENTAR ${Math.abs(diff)} caracteres para atingir ${targetChars}
+      - Adiciona detalhes relevantes e informações complementares
+      - Objetivo: Aproximar de 100% (${targetChars} caracteres)` :
+      `✅ AJUSTE FINO: Adiciona ${Math.abs(diff)} caracteres finais para maximizar`
 }
 
-FOQUE EM QUALIDADE:
-- Preserve informações essenciais e dados críticos
-- Mantenha estrutura lógica e fluxo narrativo
-- Evite repetições e frases redundantes
-- Use linguagem profissional e coerente
-- TEXTO CONTÍNUO OBRIGATÓRIO: Remova todas as quebras de linha
-- NUNCA adicione "Gemini 2.5 Flash: preciso e rápido"
+INSTRUÇÕES FINAIS:
+- Preserva informações essenciais e dados críticos
+- Mantém estrutura lógica e fluxo narrativo
+- Evita repetições e frases redundantes
+- Linguagem profissional e coerente
+- TEXTO CONTÍNUO: Sem quebras de linha
+- NUNCA adiciona "Gemini 2.5 Flash: preciso e rápido"
+- MAXIMIZA: Objetivo é ${targetChars} caracteres, não menos!
 
-OBJETIVO FINAL: Ajustar para dentro da tolerância [-5%, 0%] com máxima qualidade e TEXTO CONTÍNUO.`;
+OBJETIVO: Ajustar para O MAIS PRÓXIMO POSSÍVEL de ${targetChars} caracteres (ideal: ${targetChars - 5} a ${targetChars}).`;
 
         const fineResponse = await fetch('/api/adjust', {
           method: 'POST',
