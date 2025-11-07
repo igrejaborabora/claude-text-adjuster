@@ -117,8 +117,9 @@ TOLERÂNCIA E QUALIDADE:
 5. Preserva a estrutura lógica e fluxo narrativo
 6. Evita repetições e redundâncias
 7. Linguagem profissional e clara
-8. Sem trim(), sem "...", sem "###", sem aspas
-9. Output: APENAS o texto final, sem explicações
+8. TEXTO CONTÍNUO: Sem parágrafos, sem quebras de linha, tudo em um único bloco
+9. Sem trim(), sem "...", sem "###", sem aspas, sem "Gemini 2.5 Flash: preciso e rápido"
+10. Output: APENAS o texto final contínuo, sem explicações
 
 EXEMPLOS DE CONTAGEM:
 - "Hello world" = 11 caracteres (5 + 1 + 5)
@@ -155,9 +156,11 @@ MÉTODO DE EDIÇÃO:
 4. Linguagem profissional e coerente
 5. Contar TUDO: letras, espaços, pontuação, quebras, símbolos
 6. NUNCA exceder ${targetChars} caracteres
-7. Verificar: está entre ${Math.round(targetChars * 0.95)} e ${targetChars} caracteres?
+7. TEXTO CONTÍNUO OBRIGATÓRIO: Remover todas as quebras de linha, juntar tudo em um único parágrafo
+8. NUNCA adicionar "Gemini 2.5 Flash: preciso e rápido" ou qualquer texto extra
+9. Verificar: está entre ${Math.round(targetChars * 0.95)} e ${targetChars} caracteres?
 
-Devolve APENAS o texto editado dentro da tolerância [-5%, 0%] com qualidade profissional.`;
+Devolve APENAS o texto editado contínuo (sem quebras de linha) dentro da tolerância [-5%, 0%] com qualidade profissional.`;
 
       let result = await callAdjustAPI(systemPrompt, userPrompt);
       setIterations(1);
@@ -187,6 +190,8 @@ EDIÇÃO DE QUALIDADE:
 - Espaços antes/depois de travessões contam
 - Quebras de linha (\\n) contam como 1 caractere
 - Sem trim() - espaços início/fim contam
+- TEXTO CONTÍNUO OBRIGATÓRIO: Sem parágrafos, sem quebras de linha
+- NUNCA adicionar "Gemini 2.5 Flash: preciso e rápido"
 
 CORREÇÃO NECESSÁRIA:
 ${diff > 0 ? 
@@ -196,7 +201,7 @@ ${diff > 0 ?
     `✅ DENTRO DA TOLERÂNCIA: -${Math.abs(percentDiff).toFixed(1)}% (aceitável)`
 }
 
-OBJETIVO: Ajustar para dentro da tolerância [-5%, 0%] mantendo qualidade.`;
+OBJETIVO: Ajustar para dentro da tolerância [-5%, 0%] mantendo qualidade e TEXTO CONTÍNUO.`;
 
         const fineUser = `TEXTO ATUAL (ANÁLISE COM TOLERÂNCIA):
 ${resultNorm}
@@ -220,8 +225,10 @@ FOQUE EM QUALIDADE:
 - Mantenha estrutura lógica e fluxo narrativo
 - Evite repetições e frases redundantes
 - Use linguagem profissional e coerente
+- TEXTO CONTÍNUO OBRIGATÓRIO: Remova todas as quebras de linha
+- NUNCA adicione "Gemini 2.5 Flash: preciso e rápido"
 
-OBJETIVO FINAL: Ajustar para dentro da tolerância [-5%, 0%] com máxima qualidade.`;
+OBJETIVO FINAL: Ajustar para dentro da tolerância [-5%, 0%] com máxima qualidade e TEXTO CONTÍNUO.`;
 
         const fineResponse = await fetch('/api/adjust', {
           method: 'POST',
