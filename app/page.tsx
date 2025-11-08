@@ -1,676 +1,449 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Copy, Download, RefreshCw, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { useState } from 'react';
+import { Play, RotateCcw, Download, CheckCircle, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+
+interface Paragraph {
+  id: number;
+  text: string;
+  original: string;
+  selected: boolean;
+  chars: number;
+}
 
 export default function Home() {
-  
-  // Text adjuster state
   const [originalText, setOriginalText] = useState('');
-  const [targetChars, setTargetChars] = useState(100);
-  const [adjustedText, setAdjustedText] = useState('');
+  const [paragraphs, setParagraphs] = useState<Paragraph[]>([]);
+  const [finalText, setFinalText] = useState('');
+  const [targetChars, setTargetChars] = useState('1000');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [iterations, setIterations] = useState(0);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
 
-  // Normalização para contagem (NFC + \n)
+  // Utilitários
   const normalizeForCount = (s: string): string => {
     let t = s.normalize("NFC");
     t = t.replace(/\r\n/g, "\n");
     return t;
   };
 
-  // Contagem precisa de caracteres
   const charCount = (s: string): number => {
     return normalizeForCount(s).length;
   };
 
-  // Estimativa de tokens (chars/4 ≈ tokens)
-  const estimateTokens = (s: string): number => {
-    return Math.ceil(charCount(s) / 4);
-  };
-
-  // Converte para texto contínuo (sem quebras de linha). Não colapsa espaços e não trim para manter contagem fiel.
-  const toContinuous = (s: string): string => {
-    const n = normalizeForCount(s);
-    return n.replace(/\n+/g, ' ');
-  };
-
-  // Hard cap "inteligente": corta no máximo 'max' e tenta finalizar em limite natural (pontuação/espaço)
-  const hardCapToMax = (s: string, max: number): string => {
-    const n = toContinuous(s);
-    if (n.length <= max) return n;
-    let slice = n.slice(0, max);
-    const windowStart = Math.max(0, max - 40);
-    const win = slice.slice(windowStart);
-    const candidates = [
-      win.lastIndexOf('.'),
-      win.lastIndexOf('!'),
-      win.lastIndexOf('?'),
-      win.lastIndexOf(';'),
-      win.lastIndexOf(':'),
-      win.lastIndexOf(','),
-      win.lastIndexOf('—'),
-      win.lastIndexOf('-'),
-      win.lastIndexOf(' ')
-    ];
-    const idx = Math.max(...candidates);
-    if (idx !== -1) {
-      return slice.slice(0, windowStart + idx + 1);
-    }
-    // Fallback: procurar último espaço em todo o slice
-    const lastSpace = slice.lastIndexOf(' ');
-    if (lastSpace !== -1) return slice.slice(0, lastSpace + 1);
-    return slice;
-  };
-
-  // Copiar para clipboard
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(adjustedText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
-
-  // Exportar como .txt
-  const exportToTxt = () => {
-    const blob = new Blob([adjustedText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `adjusted_text_${targetChars}chars.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const callAdjustAPI = async (systemPrompt: string, userPrompt: string): Promise<string> => {
-    const response = await fetch('/api/adjust', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gemini-2.0-flash-exp',
-        maxTokens: 4000,
-        temperature: 0.3,
-        systemPrompt,
-        userPrompt
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Erro na API');
-    }
-
-    const data = await response.json();
-    return data.text || '';
-  };
-
-  const adjustText = async () => {
+  // Fase 1: Rephrase inicial e divisão em parágrafos
+  const handleInitialRephrase = async () => {
     if (!originalText.trim()) {
-      setError('Por favor, insira um texto para ajustar');
+      setError('Por favor, insira um texto');
       return;
-    }
-
-    if (targetChars < 10 || targetChars > 10000) {
-      setError('O alvo deve estar entre 10 e 10000 caracteres');
-      return;
-    }
-
-    // Validação de redução extrema
-    const originalNorm = normalizeForCount(originalText);
-    const originalCount = charCount(originalNorm);
-    const reductionPercent = ((originalCount - targetChars) / originalCount) * 100;
-    const targetPercent = (targetChars / originalCount) * 100;
-    
-    // Aviso para reduções superiores a 20%
-    if (targetChars < originalCount && targetPercent < 80) {
-      const minRecommended = Math.round(originalCount * 0.80);
-      const confirmMessage = `⚠️ AVISO: Redução Extrema Detectada!\n\n` +
-        `Texto original: ${originalCount} caracteres\n` +
-        `Alvo solicitado: ${targetChars} caracteres (${targetPercent.toFixed(0)}% do original)\n` +
-        `Redução: ${reductionPercent.toFixed(0)}%\n\n` +
-        `🔍 IMPORTANTE:\n` +
-        `Reduções superiores a 20% tornam IMPOSSÍVEL manter todas as informações.\n` +
-        `A API inevitavelmente fará RESUMO em vez de REPHRASE completo.\n\n` +
-        `📊 RECOMENDAÇÃO:\n` +
-        `Alvo mínimo recomendado: ${minRecommended} caracteres (80% do original)\n` +
-        `Isso garante rephrase completo sem perda de informação.\n\n` +
-        `Deseja continuar mesmo assim?\n` +
-        `(Algumas informações provavelmente serão perdidas)`;
-      
-      if (!window.confirm(confirmMessage)) {
-        return;
-      }
     }
 
     setIsProcessing(true);
     setError('');
-    setIterations(0);
 
     try {
-      const diffNeeded = targetChars - originalCount;
-      const lowerBound = Math.round(targetChars * 0.90); // Aumentado para 90%
-      const upperBound = targetChars; // Limite estrito
-      
-      const systemPrompt = `TAREFA: REPHRASE/REESCRITA COMPLETA (NÃO É RESUMO!)
+      // Fazer rephrase inicial completo (sem limite)
+      const systemPrompt = `És um editor profissional. Faz um REPHRASE COMPLETO deste texto:
+- Mantém TODAS as informações (nomes, números, datas, valores)
+- Usa vocabulário mais direto e conciso
+- Elimina apenas redundâncias naturais
+- NÃO é um resumo - é uma reformulação
+- Resultado: texto mais claro mas com 100% da informação`;
 
-**REGRAS ABSOLUTAS:**
-1. NUNCA EXCEDER ${targetChars} caracteres
-2. MANTER 100% DAS INFORMAÇÕES ORIGINAIS
-3. APENAS reformular a FORMA de escrever, NUNCA o conteúdo
+      const userPrompt = `TEXTO ORIGINAL:\n${originalText}\n\nREPHRASE completo mantendo todas as informações:`;
 
-**DIFERENÇA CRÍTICA - REPHRASE vs RESUMO:**
+      const response = await fetch('/api/adjust', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-2.0-flash-exp',
+          maxTokens: 4000,
+          temperature: 0.3,
+          systemPrompt,
+          userPrompt
+        })
+      });
 
-❌ RESUMO (ERRADO):
-- Remove informações "menos importantes"
-- Elimina detalhes, números, datas
-- Resultado: menos informação
-
-✅ REPHRASE (CORRETO):
-- Mantém TODAS as informações
-- Reformula usando palavras diferentes
-- Resultado: mesma informação, forma diferente
-
-**EXEMPLO PRÁTICO:**
-
-Original (50 chars): "A empresa, sediada em Lisboa, foi fundada em 2020"
-
-❌ Resumo ERRADO (25 chars): "Empresa fundada em 2020" 
-   → Perdeu "Lisboa"!
-
-✅ Rephrase CORRETO (35 chars): "Empresa de Lisboa, fundada em 2020"
-   → Manteve TUDO, apenas reformulou!
-
-**TÉCNICAS OBRIGATÓRIAS:**
-1. "microempresa do Porto" → "microempresa portuense"
-2. "que representa um investimento de" → "investimento de"
-3. "A executar entre março de 2026 e fevereiro de 2028" → "Entre março/2026-fevereiro/2028"
-4. Eliminar apenas: artigos redundantes, conectivos excessivos
-5. NUNCA eliminar: nomes, números, datas, valores, percentagens
-
-**CHECKLIST OBRIGATÓRIO:**
-Antes de responder, verifica se o texto tem:
-✅ Todos os nomes próprios
-✅ Todos os números e valores
-✅ Todas as datas e períodos
-✅ Todas as percentagens
-✅ Todas as entidades mencionadas
-✅ Todas as ações e objetivos
-
-**META:** ${targetChars} caracteres (±10%) com 100% de informação`;
-
-      const userPrompt = `TEXTO ORIGINAL (${originalCount} caracteres):
-${originalNorm}
-
-**TAREFA: REPHRASE COMPLETO**
-${originalCount > targetChars ? 
-  `📉 CONDENSAR de ${originalCount} para ${targetChars} caracteres
-
-**COMO CONDENSAR (mantendo TUDO):**
-1. Identifica TODAS as informações presentes
-2. Reescreve cada informação de forma mais concisa
-3. Usa vocabulário mais direto e objetivo
-4. Combina frases relacionadas
-5. Elimina apenas palavras redundantes, NÃO informações
-6. Resultado: TODAS as informações em menos caracteres
-
-**CHECKLIST - O texto condensado deve incluir:**
-- ✅ Todos os números e valores mencionados
-- ✅ Todas as datas e períodos
-- ✅ Todos os nomes e entidades
-- ✅ Todas as ações e objetivos
-- ✅ Todos os conceitos e ideias` :
-  `📈 EXPANDIR de ${originalCount} para ${targetChars} caracteres
-
-**COMO EXPANDIR:**
-1. Adiciona contexto a cada ponto mencionado
-2. Detalha processos e metodologias
-3. Inclui benefícios e impactos específicos
-4. Explica termos técnicos quando relevante
-5. Adiciona exemplos concretos
-6. Resultado: Mesma informação com mais profundidade`
-}
-
-**META FINAL:**
-- ${targetChars} caracteres (aceitável: ${lowerBound}-${targetChars})
-- **NUNCA exceder ${targetChars}**
-- Texto coeso e completo
-- ZERO perda de informação`;
-
-      let result = await callAdjustAPI(systemPrompt, userPrompt);
-      setIterations(1);
-
-      // Loop de ajuste fino - mais iterações para convergir melhor
-      for (let i = 2; i <= 8; i++) {
-        const resultNorm = normalizeForCount(result);
-        const resultCount = charCount(resultNorm);
-        const diff = resultCount - targetChars;
-        const percentDiff = (diff / targetChars) * 100;
-        
-        // VALIDAÇÃO CRÍTICA: Se excedeu o limite, aplicar HARD CAP imediatamente
-        if (diff > 0) {
-          console.log(`🚨 API excedeu limite em ${diff} chars. Aplicando hard cap...`);
-          result = hardCapToMax(resultNorm, targetChars);
-          setIterations(i);
-          
-          // Verificar se o hard cap funcionou
-          const afterCapCount = charCount(result);
-          if (afterCapCount <= targetChars) {
-            console.log(`✅ Hard cap funcionou: ${afterCapCount} chars`);
-            break; // Sair do loop se estiver dentro do limite
-          }
-          continue;
-        }
-        // Se excedeu o limite após hard cap (raro), tentar reescrever
-        if (diff > 0) {
-          const fineSystem = `AJUSTE FINO – REPHRASE PARA REDUZIR (${resultCount} → ${targetChars} chars)
-
-**SITUAÇÃO:** Texto tem ${diff} caracteres a mais (${Math.abs(percentDiff).toFixed(1)}% acima)
-
-**OBJETIVO:** REESCREVER todo o texto de forma mais concisa
-- Meta: ${lowerBound} a ${targetChars} caracteres
-- Método: REFORMULAÇÃO, não truncamento
-- TODAS as informações devem permanecer
-
-**TÉCNICA:**
-1. Identifica cada informação presente
-2. Reformula cada uma de forma mais direta
-3. Usa vocabulário mais conciso
-4. Mantém TODOS os dados, nomes, valores, datas
-5. Resultado: mesma informação, menos caracteres
-
-**CRÍTICO: NUNCA EXCEDER ${targetChars} CARACTERES**`;
-
-          const fineUser = `TEXTO PARA REPHRASE (${resultCount} chars):
-${resultNorm}
-
-**TAREFA:**
-Reescreve este texto em ${targetChars} caracteres mantendo:
-✅ Todas as informações e conceitos
-✅ Todos os números e valores
-✅ Todas as datas e períodos
-✅ Todos os nomes e entidades
-✅ Todo o significado original
-
-**MÉTODO:**
-- Usa frases mais diretas e objetivas
-- Substitui expressões longas por curtas
-- Combina informações relacionadas
-- Elimina apenas redundâncias
-
-**META:** ${targetChars} caracteres (máximo absoluto)`;
-
-          const fineResponse = await fetch('/api/adjust', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              model: 'gemini-2.0-flash-exp',
-              maxTokens: 4000,
-              temperature: 0.3,
-              systemPrompt: fineSystem,
-              userPrompt: fineUser
-            })
-          });
-
-          if (!fineResponse.ok) break;
-          const fineData = await fineResponse.json();
-          result = normalizeForCount(fineData.text || result);
-          setIterations(i);
-          continue;
-        }
-
-        // Parar se dentro da tolerância [-10%, 0%] (aumentada)
-        if (percentDiff >= -10 && diff <= 0) break;
-
-        // Se estiver curto além da tolerância (< -10%), expandir até a faixa superior sem exceder
-        if (percentDiff < -10) {
-          const targetHigh = targetChars - 1; // preferir topo da faixa sem exceder
-          const targetLow = lowerBound;
-          const desired = Math.max(targetLow, targetHigh);
-          const charsNeeded = desired - resultCount;
-          if (charsNeeded <= 0) break;
-
-          const fineSystem = `AJUSTE FINO – TEXTO ABAIXO DA FAIXA (EXPANSÃO URGENTE)
-
-Texto atual: ${resultCount} caracteres (${(resultCount / targetChars * 100).toFixed(1)}% do alvo)
-FALTAM: ${charsNeeded} caracteres para atingir ${desired}
-
-**AÇÃO CRÍTICA:** ADICIONAR EXATAMENTE ${charsNeeded} caracteres
-- Expande o ÚLTIMO parágrafo com detalhes CONCRETOS e ESPECÍFICOS
-- Adiciona: exemplos, dados, benefícios, contextos, impactos
-- Se ainda faltar, expande o penúltimo parágrafo
-- Mantém coerência e fluxo lógico
-- Evita repetições e clichês
-- Formato contínuo (sem \\n)
-- **OBRIGATÓRIO: Não exceder ${targetChars - 1}**
-
-**EXEMPLOS DE CONTEÚDO PARA ADICIONAR:**
-- Dados quantificáveis (números, percentagens)
-- Benefícios específicos e mensuráveis
-- Exemplos práticos e casos de uso
-- Contexto de mercado ou setor
-- Impactos esperados ou resultados
-- Detalhes técnicos ou metodológicos`;
-
-          const fineUser = `TEXTO ABAIXO DA FAIXA (${resultCount} caracteres):
-${resultNorm}
-
-**TAREFA URGENTE:**
-- ADICIONAR EXATAMENTE: ${charsNeeded} caracteres (tolerância ±5)
-- ALVO MÍNIMO: ${desired} caracteres
-- **NUNCA EXCEDER ${targetChars} caracteres**
-
-**CONTEÚDO PARA ADICIONAR:**
-- Dados concretos e específicos
-- Exemplos práticos e detalhados
-- Benefícios mensuráveis
-- Contexto de mercado/sector
-- Impactos quantificáveis
-- Detalhes técnicos/metodológicos
-
-**REGRAS:**
-- Expande parágrafos existentes (não cria novos)
-- Mantém coerência e fluxo lógico
-- Evita repetições e generalidades
-- Texto contínuo (sem quebras de linha)
-- **Resultado: texto expandido dentro da faixa ${lowerBound}-${targetChars}**`;
-
-          const fineResponse = await fetch('/api/adjust', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              model: 'gemini-2.0-flash-exp',
-              maxTokens: 3000, // Aumentado para expansão
-              temperature: 0.4, // Aumentado para mais criatividade
-              systemPrompt: fineSystem,
-              userPrompt: fineUser
-            })
-          });
-
-          if (!fineResponse.ok) break;
-          const fineData = await fineResponse.json();
-          result = normalizeForCount(fineData.text || result);
-          setIterations(i);
-          continue;
-        }
-
-        // Caso contrário, interrompe para evitar loops infinitos
-        break;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro na API');
       }
 
-      // VALIDAÇÃO FINAL: Garantir que nunca excede o limite
-      let finalResult = hardCapToMax(result, targetChars);
-      const finalCount = charCount(finalResult);
-      
-      // Se ainda estiver excedendo (muito raro), cortar brutalmente
-      if (finalCount > targetChars) {
-        console.log(`🚨 EMERGÊNCIA: Cortando ${finalCount - targetChars} caracteres excedentes`);
-        finalResult = finalResult.slice(0, targetChars);
-      }
-      
-      setAdjustedText(finalResult);
+      const data = await response.json();
+      const rephrasedText = data.text || '';
 
-    } catch (err: any) {
-      setError(err.message || 'Ocorreu um erro ao processar o texto');
-    } finally {
+      // Dividir em parágrafos
+      const paragraphTexts = rephrasedText
+        .split(/\n\n+/)
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
+
+      const newParagraphs: Paragraph[] = paragraphTexts.map((text, index) => ({
+        id: index,
+        text: text,
+        original: text,
+        selected: false,
+        chars: charCount(text)
+      }));
+
+      setParagraphs(newParagraphs);
+      setFinalText(rephrasedText);
+      setIsProcessing(false);
+
+    } catch (err) {
+      const error = err as Error;
+      setError(error.message || 'Erro ao processar');
       setIsProcessing(false);
     }
   };
 
-  // Status de precisão (tolerância -5% a 0%)
-  const getStatus = () => {
-    if (!adjustedText) return null;
-    const actual = charCount(adjustedText);
-    const diff = actual - targetChars;
-    const percentDiff = (diff / targetChars) * 100;
-    
-    if (diff === 0) return { type: 'perfect', text: '🎯 EXATO', color: 'text-green-600' };
-    if (percentDiff >= -10 && diff < 0) return { type: 'excellent', text: '✅ Aceitável', color: 'text-blue-600' };
-    if (percentDiff >= -15 && diff < -10) return { type: 'good', text: '⚠️ Um pouco curto', color: 'text-yellow-600' };
-    if (diff > 0) return { type: 'warning', text: '🚨 Excedeu limite', color: 'text-red-600' };
-    return { type: 'warning', text: '❌ Muito curto', color: 'text-red-600' };
+  // Alternar seleção de parágrafo
+  const toggleParagraph = (id: number) => {
+    setParagraphs(prev =>
+      prev.map(p => p.id === id ? { ...p, selected: !p.selected } : p)
+    );
   };
 
-  const status = getStatus();
+  // Iterar parágrafos selecionados
+  const handleIterateParagraphs = async () => {
+    const selectedParagraphs = paragraphs.filter(p => p.selected);
+    
+    if (selectedParagraphs.length === 0) {
+      setError('Selecione pelo menos um parágrafo');
+      return;
+    }
 
-  const renderTextAdjuster = () => (
-    <div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Input Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-800">Texto Original</h2>
-            <div className="text-sm text-gray-500">
-              {charCount(originalText)} caracteres
-            </div>
-          </div>
+    const target = parseInt(targetChars);
+    if (isNaN(target) || target < 10) {
+      setError('Alvo de caracteres inválido');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError('');
+
+    try {
+      let updatedParagraphs = [...paragraphs];
+
+      // Processar cada parágrafo selecionado
+      for (const para of selectedParagraphs) {
+        const currentLength = charCount(para.text);
+        const reductionNeeded = Math.max(Math.round(currentLength * 0.85), 50); // Reduzir ~15%
+
+        const systemPrompt = `Reescreve este parágrafo de forma mais concisa:
+- Meta: aproximadamente ${reductionNeeded} caracteres
+- Mantém TODAS as informações essenciais
+- Usa frases mais diretas
+- NUNCA exceder o texto original em tamanho`;
+
+        const userPrompt = `PARÁGRAFO ORIGINAL (${currentLength} chars):\n${para.text}\n\nVersão mais concisa (~${reductionNeeded} chars):`;
+
+        const response = await fetch('/api/adjust', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: 'gemini-2.0-flash-exp',
+            maxTokens: 2000,
+            temperature: 0.3,
+            systemPrompt,
+            userPrompt
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const newText = data.text || para.text;
           
-          <textarea
-            value={originalText}
-            onChange={(e) => setOriginalText(e.target.value)}
-            className="w-full h-64 p-4 border-2 border-gray-200 rounded-lg resize-none focus:border-blue-500 focus:outline-none"
-            placeholder="Cole ou digite seu texto aqui..."
-          />
+          updatedParagraphs = updatedParagraphs.map(p =>
+            p.id === para.id ? { ...p, text: newText, chars: charCount(newText) } : p
+          );
+        }
+      }
 
-          <div className="mt-4 space-y-3">
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
-                Alvo de caracteres:
-              </label>
-              <input
-                type="number"
-                value={targetChars}
-                onChange={(e) => setTargetChars(Math.max(1, parseInt(e.target.value) || 1))}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                min="1"
-                max="10000"
-              />
-            </div>
+      setParagraphs(updatedParagraphs);
+      
+      // Atualizar texto final
+      const newFinalText = updatedParagraphs.map((p: Paragraph) => p.text).join('\n\n');
+      setFinalText(newFinalText);
+      
+      setIsProcessing(false);
 
-            {/* Indicador de Redução/Expansão */}
-            {originalText.trim() && (
-              <div className="text-sm">
-                {(() => {
-                  const origCount = charCount(originalText);
-                  const targetPercent = (targetChars / origCount) * 100;
-                  const diff = targetChars - origCount;
-                  const isReduction = diff < 0;
-                  const isExpansion = diff > 0;
-                  const isExtremeReduction = isReduction && targetPercent < 80;
-                  
-                  if (isExtremeReduction) {
-                    const minRecommended = Math.round(origCount * 0.80);
-                    return (
-                      <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-                          <div>
-                            <p className="font-semibold text-red-900">⚠️ Redução Extrema ({targetPercent.toFixed(0)}%)</p>
-                            <p className="text-red-700 text-xs mt-1">
-                              Reduções &gt; 20% causarão perda de informação!<br/>
-                              Mínimo recomendado: <strong>{minRecommended} chars</strong>
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-                  
-                  if (isReduction && targetPercent >= 80) {
-                    return (
-                      <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded">
-                        <div className="flex items-center gap-2">
-                          <Info className="w-4 h-4 text-yellow-600" />
-                          <p className="text-yellow-900 text-xs">
-                            Redução: {Math.abs(diff)} chars ({targetPercent.toFixed(0)}% do original) - Rephrase possível
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  }
-                  
-                  if (isExpansion) {
-                    return (
-                      <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4 text-blue-600" />
-                          <p className="text-blue-900 text-xs">
-                            Expansão: +{diff} chars ({targetPercent.toFixed(0)}% do original) - Conteúdo será detalhado
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  }
-                  
-                  return (
-                    <div className="bg-green-50 border-l-4 border-green-500 p-3 rounded">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                        <p className="text-green-900 text-xs">
-                          Texto já está no alvo ({origCount} chars)
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
+    } catch (err) {
+      const error = err as Error;
+      setError(error.message || 'Erro ao iterar');
+      setIsProcessing(false);
+    }
+  };
 
-            <button
-              onClick={adjustText}
-              disabled={!originalText.trim() || isProcessing}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-            >
-              {isProcessing ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Ajustando...
-                </>
-              ) : (
-                'Ajustar Texto'
-              )}
-            </button>
+  // Reset
+  const handleReset = () => {
+    setOriginalText('');
+    setParagraphs([]);
+    setFinalText('');
+    setError('');
+  };
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-          </div>
-        </div>
+  // Exportar
+  const handleExport = () => {
+    const blob = new Blob([finalText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `texto-ajustado-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-        {/* Output Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-800">Texto Ajustado</h2>
-            <div className="flex items-center gap-3">
-              {status && (
-                <div className={`flex items-center gap-1 text-sm font-medium ${status.color}`}>
-                  {status.type === 'perfect' && <CheckCircle className="w-4 h-4" />}
-                  {status.type === 'excellent' && <CheckCircle className="w-4 h-4" />}
-                  {status.type === 'good' && <Info className="w-4 h-4" />}
-                  {status.type === 'warning' && <AlertCircle className="w-4 h-4" />}
-                  {status.text}
-                </div>
-              )}
-              <div className="text-sm text-gray-500">
-                {adjustedText ? charCount(adjustedText) : 0} caracteres
-              </div>
-            </div>
-          </div>
-
-          <textarea
-            value={adjustedText}
-            readOnly
-            className="w-full h-64 p-4 border-2 border-gray-200 rounded-lg bg-gray-50 resize-none"
-            placeholder="O texto ajustado aparecerá aqui..."
-          />
-
-          {adjustedText && (
-            <div className="mt-4 flex gap-3">
-              <button
-                onClick={copyToClipboard}
-                className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-              >
-                {copied ? (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    Copiado!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    Copiar
-                  </>
-                )}
-              </button>
-              <button
-                onClick={exportToTxt}
-                className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Exportar .txt
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Info Section */}
-      <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-3">Como Funciona - REPHRASE Inteligente</h3>
-        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
-          <p className="text-sm text-blue-900">
-            <strong>⚠️ IMPORTANTE:</strong> Esta aplicação faz <strong>REPHRASE/REESCRITA</strong>, não resumo ou truncamento.
-            <br/>
-            <strong>TODAS as informações</strong> do texto original são mantidas, apenas reformuladas para caber no limite de caracteres.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-          <div className="flex items-start gap-2">
-            <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-            <div>
-              <strong>Rephrase Completo:</strong> Reformula mantendo TODO o contexto
-            </div>
-          </div>
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-            <div>
-              <strong>Tolerância:</strong> -10% a 0% (aceitável: {Math.round(targetChars * 0.90)}-{targetChars} chars)
-            </div>
-          </div>
-          <div className="flex items-start gap-2">
-            <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-            <div>
-              <strong>Zero Perda:</strong> Nenhuma informação é removida
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  // Calcular totais
+  const totalChars = paragraphs.reduce((sum, p) => sum + p.chars, 0);
+  const targetNum = parseInt(targetChars) || 0;
+  const diff = totalChars - targetNum;
+  const selectedCount = paragraphs.filter(p => p.selected).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <div className="max-w-7xl mx-auto p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-            Text Adjuster
+            Text Adjuster - Iterativo
           </h1>
-          <p className="text-gray-600 text-lg">
-            Ajusta textos para um limite exato de caracteres usando IA
+          <p className="text-slate-600">
+            Rephrase inteligente com controle parágrafo a parágrafo
           </p>
         </div>
 
-        {/* Content */}
-        {renderTextAdjuster()}
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600" />
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* CAIXA 1: Introdução */}
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 text-sm font-bold">
+                  1
+                </span>
+                Texto Original
+              </CardTitle>
+              <CardDescription>
+                {charCount(originalText)} caracteres
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea
+                value={originalText}
+                onChange={(e) => setOriginalText(e.target.value)}
+                placeholder="Cole seu texto aqui..."
+                className="min-h-[300px] resize-none font-mono text-sm"
+              />
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Alvo de caracteres:</label>
+                <Input
+                  type="text"
+                  value={targetChars}
+                  onChange={(e) => setTargetChars(e.target.value)}
+                  placeholder="Ex: 1000"
+                  className="font-mono"
+                />
+              </div>
+
+              <Button
+                onClick={handleInitialRephrase}
+                disabled={!originalText.trim() || isProcessing}
+                className="w-full"
+                size="lg"
+              >
+                {isProcessing ? (
+                  <>
+                    <RotateCcw className="w-4 h-4 mr-2 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 mr-2" />
+                    Iniciar Rephrase
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* CAIXA 2: Resultado Iterativo */}
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-600 text-sm font-bold">
+                  2
+                </span>
+                Iteração por Parágrafos
+              </CardTitle>
+              <CardDescription>
+                {totalChars} caracteres | Alvo: {targetChars} | 
+                Diff: <span className={diff > 0 ? 'text-red-600' : 'text-green-600'}>
+                  {diff > 0 ? '+' : ''}{diff}
+                </span>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {paragraphs.length === 0 ? (
+                <div className="text-center py-20 text-slate-400">
+                  <p>Faça o rephrase inicial primeiro</p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                    {paragraphs.map((para) => (
+                      <div
+                        key={para.id}
+                        onClick={() => toggleParagraph(para.id)}
+                        className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                          para.selected
+                            ? 'border-purple-500 bg-purple-50'
+                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2 mb-2">
+                          <div className={`flex-shrink-0 w-5 h-5 rounded border-2 ${
+                            para.selected
+                              ? 'bg-purple-500 border-purple-500'
+                              : 'border-slate-300'
+                          } flex items-center justify-center`}>
+                            {para.selected && <CheckCircle className="w-4 h-4 text-white" />}
+                          </div>
+                          <Badge variant="outline" className="text-xs">
+                            {para.chars} chars
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-slate-700 line-clamp-3">
+                          {para.text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-600">
+                      {selectedCount} parágrafo(s) selecionado(s)
+                    </span>
+                  </div>
+
+                  <Button
+                    onClick={handleIterateParagraphs}
+                    disabled={selectedCount === 0 || isProcessing}
+                    className="w-full"
+                    variant="secondary"
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Iterar Selecionados
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* CAIXA 3: Resultado Final */}
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-600 text-sm font-bold">
+                  3
+                </span>
+                Resultado Final
+              </CardTitle>
+              <CardDescription>
+                {charCount(finalText)} caracteres
+                {finalText && (
+                  <span className={`ml-2 ${
+                    charCount(finalText) <= targetNum ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {charCount(finalText) <= targetNum ? '✅ Dentro do alvo' : '⚠️ Acima do alvo'}
+                  </span>
+                )}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea
+                value={finalText}
+                readOnly
+                className="min-h-[300px] resize-none font-mono text-sm bg-slate-50"
+                placeholder="O resultado aparecerá aqui..."
+              />
+
+              {finalText && (
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleExport}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Exportar
+                  </Button>
+                  <Button
+                    onClick={handleReset}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Recomeçar
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Info */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-lg">Como Funciona</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
+                  1
+                </span>
+                <div>
+                  <p className="font-medium">Rephrase Inicial</p>
+                  <p className="text-slate-600">Reformula todo o texto mantendo 100% das informações</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold">
+                  2
+                </span>
+                <div>
+                  <p className="font-medium">Iteração Seletiva</p>
+                  <p className="text-slate-600">Escolha parágrafos específicos para condensar ainda mais</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold">
+                  3
+                </span>
+                <div>
+                  <p className="font-medium">Resultado Final</p>
+                  <p className="text-slate-600">Texto otimizado com controle total do processo</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
