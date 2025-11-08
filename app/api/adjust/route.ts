@@ -132,10 +132,11 @@ export async function POST(request: NextRequest) {
       usage: data?.usageMetadata || {}
     });
 
-  } catch (error: any) {
-    console.error("Server error:", error);
+  } catch (error) {
+    const err = error as Error;
+    console.error("Server error:", err);
     return NextResponse.json(
-      { error: error?.message || "Erro interno do servidor" },
+      { error: err?.message || "Erro interno do servidor" },
       { status: 500 }
     );
   }
