@@ -15,6 +15,8 @@ interface Paragraph {
   original: string;
   selected: boolean;
   chars: number;
+  history: string[]; // Histórico de versões (index 0 = mais antiga)
+  currentVersionIndex: number; // Índice da versão atual no histórico
 }
 
 export default function Home() {
@@ -88,11 +90,17 @@ export default function Home() {
         text: text,
         original: text,
         selected: false,
-        chars: charCount(text)
+        chars: charCount(text),
+        history: [text], // Versão inicial no histórico
+        currentVersionIndex: 0
       }));
 
       setParagraphs(newParagraphs);
-      setFinalText(rephrasedText);
+      
+      // Texto final CORRIDO (sem parágrafos)
+      const corrido = newParagraphs.map(p => p.text).join(' ');
+      setFinalText(corrido);
+      
       setIsProcessing(false);
 
     } catch (err) {
@@ -107,6 +115,98 @@ export default function Home() {
     setParagraphs(prev =>
       prev.map(p => p.id === id ? { ...p, selected: !p.selected } : p)
     );
+  };
+
+  // Iterar um parágrafo individualmente
+  const iterateSingleParagraph = async (id: number) => {
+    const para = paragraphs.find(p => p.id === id);
+    if (!para) return;
+
+    setIsProcessing(true);
+    setError('');
+
+    try {
+      const currentLength = charCount(para.text);
+      const targetLength = Math.max(Math.round(currentLength * 0.85), 50);
+
+      const systemPrompt = `Reescreve este parágrafo de forma mais concisa:
+- Meta: aproximadamente ${targetLength} caracteres
+- Mantém TODAS as informações essenciais
+- Usa frases mais diretas
+- NUNCA exceder o texto original em tamanho`;
+
+      const userPrompt = `PARÁGRAFO ORIGINAL (${currentLength} chars):\n${para.text}\n\nVersão mais concisa (~${targetLength} chars):`;
+
+      const response = await fetch('/api/adjust', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-2.0-flash-exp',
+          maxTokens: 2000,
+          temperature: 0.3,
+          systemPrompt,
+          userPrompt
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newText = data.text || para.text;
+        
+        setParagraphs(prev => {
+          const updated = prev.map(p => {
+            if (p.id === id) {
+              const newHistory = [...p.history, newText];
+              return {
+                ...p,
+                text: newText,
+                chars: charCount(newText),
+                history: newHistory,
+                currentVersionIndex: newHistory.length - 1
+              };
+            }
+            return p;
+          });
+          
+          // Atualizar texto final imediatamente (CORRIDO)
+          const newFinalText = updated.map((p: Paragraph) => p.text).join(' ');
+          setFinalText(newFinalText);
+          
+          return updated;
+        });
+      }
+
+      setIsProcessing(false);
+    } catch (err) {
+      const error = err as Error;
+      setError(error.message || 'Erro ao iterar');
+      setIsProcessing(false);
+    }
+  };
+
+  // Reverter parágrafo para versão anterior
+  const revertParagraph = (id: number) => {
+    setParagraphs(prev => {
+      const updated = prev.map(p => {
+        if (p.id === id && p.currentVersionIndex > 0) {
+          const newIndex = p.currentVersionIndex - 1;
+          const prevText = p.history[newIndex];
+          return {
+            ...p,
+            text: prevText,
+            chars: charCount(prevText),
+            currentVersionIndex: newIndex
+          };
+        }
+        return p;
+      });
+      
+      // Atualizar texto final imediatamente
+      const newFinalText = updated.map((p: Paragraph) => p.text).join(' ');
+      setFinalText(newFinalText);
+      
+      return updated;
+    });
   };
 
   // Iterar parágrafos selecionados
@@ -159,16 +259,26 @@ export default function Home() {
           const data = await response.json();
           const newText = data.text || para.text;
           
-          updatedParagraphs = updatedParagraphs.map(p =>
-            p.id === para.id ? { ...p, text: newText, chars: charCount(newText) } : p
-          );
+          updatedParagraphs = updatedParagraphs.map(p => {
+            if (p.id === para.id) {
+              const newHistory = [...p.history, newText];
+              return {
+                ...p,
+                text: newText,
+                chars: charCount(newText),
+                history: newHistory,
+                currentVersionIndex: newHistory.length - 1
+              };
+            }
+            return p;
+          });
         }
       }
 
       setParagraphs(updatedParagraphs);
       
-      // Atualizar texto final
-      const newFinalText = updatedParagraphs.map((p: Paragraph) => p.text).join('\n\n');
+      // Atualizar texto final (CORRIDO)
+      const newFinalText = updatedParagraphs.map((p: Paragraph) => p.text).join(' ');
       setFinalText(newFinalText);
       
       setIsProcessing(false);
@@ -307,24 +417,60 @@ export default function Home() {
                     {paragraphs.map((para) => (
                       <div
                         key={para.id}
-                        onClick={() => toggleParagraph(para.id)}
-                        className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                        className={`p-3 rounded-lg border-2 transition-all ${
                           para.selected
                             ? 'border-purple-500 bg-purple-50'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                            : 'border-slate-200 bg-white'
                         }`}
                       >
-                        <div className="flex items-start gap-2 mb-2">
-                          <div className={`flex-shrink-0 w-5 h-5 rounded border-2 ${
-                            para.selected
-                              ? 'bg-purple-500 border-purple-500'
-                              : 'border-slate-300'
-                          } flex items-center justify-center`}>
-                            {para.selected && <CheckCircle className="w-4 h-4 text-white" />}
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <div 
+                              onClick={() => toggleParagraph(para.id)}
+                              className={`flex-shrink-0 w-5 h-5 rounded border-2 cursor-pointer ${
+                                para.selected
+                                  ? 'bg-purple-500 border-purple-500'
+                                  : 'border-slate-300 hover:border-slate-400'
+                              } flex items-center justify-center`}>
+                              {para.selected && <CheckCircle className="w-4 h-4 text-white" />}
+                            </div>
+                            <Badge variant="outline" className="text-xs">
+                              {para.chars} chars
+                            </Badge>
+                            {para.history.length > 1 && (
+                              <Badge variant="secondary" className="text-xs">
+                                v{para.currentVersionIndex + 1}/{para.history.length}
+                              </Badge>
+                            )}
                           </div>
-                          <Badge variant="outline" className="text-xs">
-                            {para.chars} chars
-                          </Badge>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                revertParagraph(para.id);
+                              }}
+                              disabled={para.currentVersionIndex === 0 || isProcessing}
+                              className="h-7 px-2 text-xs"
+                              title="Reverter para versão anterior"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                iterateSingleParagraph(para.id);
+                              }}
+                              disabled={isProcessing}
+                              className="h-7 px-2 text-xs"
+                              title="Iterar (reduzir mais)"
+                            >
+                              +
+                            </Button>
+                          </div>
                         </div>
                         <p className="text-sm text-slate-700 line-clamp-3">
                           {para.text}
