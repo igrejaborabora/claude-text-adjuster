@@ -80,10 +80,10 @@ export default function Home() {
       // Dividir em parágrafos
       const paragraphTexts = rephrasedText
         .split(/\n\n+/)
-        .map(p => p.trim())
-        .filter(p => p.length > 0);
+        .map((p: string) => p.trim())
+        .filter((p: string) => p.length > 0);
 
-      const newParagraphs: Paragraph[] = paragraphTexts.map((text, index) => ({
+      const newParagraphs: Paragraph[] = paragraphTexts.map((text: string, index: number) => ({
         id: index,
         text: text,
         original: text,
